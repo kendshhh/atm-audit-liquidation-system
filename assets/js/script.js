@@ -124,6 +124,40 @@ if (statusModal) {
     });
 }
 
+var reconcileAccount = document.getElementById('reconcileAccount');
+var reconcileSystemBalance = document.getElementById('reconcileSystemBalance');
+var reconcileActualBalance = document.getElementById('reconcileActualBalance');
+var reconcileDifference = document.getElementById('reconcileDifference');
+
+function updateReconciliationPreview(resetActual) {
+    if (!reconcileAccount || !reconcileSystemBalance || !reconcileActualBalance || !reconcileDifference) {
+        return;
+    }
+
+    var selected = reconcileAccount.options[reconcileAccount.selectedIndex];
+    var systemBalance = parseFloat(selected ? selected.dataset.balance || '0' : '0');
+    reconcileSystemBalance.value = peso(systemBalance);
+
+    if (resetActual || reconcileActualBalance.value === '') {
+        reconcileActualBalance.value = systemBalance.toFixed(2);
+    }
+
+    var actualBalance = parseFloat(reconcileActualBalance.value || '0');
+    var difference = actualBalance - systemBalance;
+    var label = difference < 0 ? 'Missing Funds' : (difference > 0 ? 'Excess Funds' : 'Balanced');
+    reconcileDifference.value = label + ' - ' + peso(difference);
+}
+
+if (reconcileAccount && reconcileActualBalance) {
+    reconcileAccount.addEventListener('change', function () {
+        updateReconciliationPreview(true);
+    });
+    reconcileActualBalance.addEventListener('input', function () {
+        updateReconciliationPreview(false);
+    });
+    updateReconciliationPreview(true);
+}
+
 if (window.Chart) {
     var balanceCanvas = document.getElementById('balanceChart');
     if (balanceCanvas) {

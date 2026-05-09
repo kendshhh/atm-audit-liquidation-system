@@ -23,8 +23,27 @@ renderHeader('Reconciliation');
             <form method="post" action="<?= actionUrl('reconcile_balance.php') ?>">
                 <input type="hidden" name="csrf_token" value="<?= e(csrfToken()) ?>">
                 <div class="mb-3"><label class="form-label">Date</label><input type="date" name="reconciliation_date" class="form-control" value="<?= e(today()) ?>" required></div>
-                <div class="mb-3"><label class="form-label">Account</label><select name="account_id" class="form-select" required><?php foreach (fetchAccounts() as $a): ?><option value="<?= (int) $a['id'] ?>"><?= e($a['account_name']) ?> - System <?= money($a['current_balance']) ?></option><?php endforeach; ?></select></div>
-                <div class="mb-3"><label class="form-label">Actual ATM Balance</label><input type="number" name="actual_atm_balance" min="0" step="0.01" class="form-control" required></div>
+                <div class="mb-3">
+                    <label class="form-label">Account</label>
+                    <select name="account_id" id="reconcileAccount" class="form-select" required>
+                        <?php foreach (fetchAccounts() as $a): ?>
+                            <option value="<?= (int) $a['id'] ?>" data-balance="<?= e((string) $a['current_balance']) ?>"><?= e($a['account_name']) ?> - System <?= money($a['current_balance']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">System Computed Balance</label>
+                    <input type="text" id="reconcileSystemBalance" class="form-control" readonly>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Actual ATM Balance</label>
+                    <input type="number" name="actual_atm_balance" id="reconcileActualBalance" min="0" step="0.01" class="form-control" required>
+                    <div class="form-text">Auto-filled from the system balance. Change it only if the real ATM/bank balance is different.</div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Difference Preview</label>
+                    <input type="text" id="reconcileDifference" class="form-control" readonly>
+                </div>
                 <div class="mb-3"><label class="form-label">Notes</label><textarea name="notes" class="form-control" rows="2"></textarea></div>
                 <button class="btn btn-primary-soft w-100">Save Reconciliation</button>
             </form>
