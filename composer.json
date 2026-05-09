@@ -1,0 +1,10 @@
+{
+  "name": "school/atm-audit-liquidation-system",
+  "description": "ATM Audit and Liquidation Management System",
+  "type": "project",
+  "require": {
+    "php": ">=8.0",
+    "tecnickcom/tcpdf": "^6.7",
+    "phpoffice/phpspreadsheet": "^2.1"
+  }
+}

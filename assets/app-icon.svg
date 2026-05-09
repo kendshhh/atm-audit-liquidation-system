@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="ATM Audit icon">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#7b8cff"/>
+      <stop offset="100%" stop-color="#7ed6a7"/>
+    </linearGradient>
+  </defs>
+  <rect x="16" y="16" width="224" height="224" rx="52" fill="url(#bg)"/>
+  <rect x="52" y="66" width="152" height="124" rx="20" fill="rgba(255,255,255,0.95)"/>
+  <rect x="68" y="84" width="120" height="16" rx="8" fill="#516178"/>
+  <rect x="68" y="112" width="80" height="12" rx="6" fill="#7f8da1"/>
+  <rect x="68" y="138" width="56" height="12" rx="6" fill="#7f8da1"/>
+  <circle cx="176" cy="144" r="18" fill="#7b8cff"/>
+  <path d="M171 144h10M176 139v10" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+</svg>
