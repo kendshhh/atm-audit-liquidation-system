@@ -43,6 +43,79 @@ $recentTransactions = db()->prepare(
 $recentTransactions->execute(bindAccountAccess());
 $recentTransactions = $recentTransactions->fetchAll();
 
+$adminHappenings = [];
+if (isAdmin()) {
+    $adminHappenings = db()->query(
+        'SELECT happened_at, account_name, activity_type, title, amount, status
+         FROM (
+            SELECT d.created_at AS happened_at,
+                   a.account_name AS account_name,
+                   "Deposit" AS activity_type,
+                   COALESCE(NULLIF(d.notes, ""), "Deposit recorded") AS title,
+                   d.total_amount AS amount,
+                   "Completed" AS status
+            FROM deposits d
+            JOIN accounts a ON a.id = d.account_id
+            WHERE d.deleted_at IS NULL
+
+            UNION ALL
+
+            SELECT al.updated_at AS happened_at,
+                   a.account_name AS account_name,
+                   "Allocation" AS activity_type,
+                   al.purpose AS title,
+                   al.allocated_amount AS amount,
+                   al.status AS status
+            FROM allocations al
+            JOIN accounts a ON a.id = al.account_id
+            WHERE al.deleted_at IS NULL AND al.updated_at IS NOT NULL
+
+            UNION ALL
+
+            SELECT t.created_at AS happened_at,
+                   a.account_name AS account_name,
+                   t.transaction_type AS activity_type,
+                   COALESCE(NULLIF(t.description, ""), t.category) AS title,
+                   t.amount AS amount,
+                   t.status AS status
+            FROM transactions t
+            JOIN accounts a ON a.id = t.account_id
+            WHERE t.deleted_at IS NULL
+
+            UNION ALL
+
+            SELECT tr.created_at AS happened_at,
+                   CONCAT(fa.account_name, " to ", ta.account_name) AS account_name,
+                   "Transfer" AS activity_type,
+                   COALESCE(NULLIF(tr.notes, ""), "Account transfer") AS title,
+                   tr.amount AS amount,
+                   "Transferred" AS status
+            FROM transfers tr
+            JOIN accounts fa ON fa.id = tr.from_account_id
+            JOIN accounts ta ON ta.id = tr.to_account_id
+            WHERE tr.deleted_at IS NULL
+
+            UNION ALL
+
+            SELECT r.created_at AS happened_at,
+                   a.account_name AS account_name,
+                   "Reconciliation" AS activity_type,
+                   COALESCE(NULLIF(r.notes, ""), "Balance reconciliation") AS title,
+                   r.difference AS amount,
+                   CASE
+                       WHEN r.difference < 0 THEN "Missing Funds"
+                       WHEN r.difference > 0 THEN "Excess Funds"
+                       ELSE "Balanced"
+                   END AS status
+            FROM reconciliations r
+            JOIN accounts a ON a.id = r.account_id
+            WHERE r.deleted_at IS NULL
+         ) happenings
+         ORDER BY happened_at DESC
+         LIMIT 20'
+    )->fetchAll();
+}
+
 renderHeader('Dashboard');
 ?>
 <div class="hero-grid">
@@ -99,6 +172,48 @@ renderHeader('Dashboard');
         </div>
     <?php endforeach; ?>
 </div>
+
+<?php if (isAdmin()): ?>
+    <div class="glass-card mt-4">
+        <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+            <div>
+                <div class="eyebrow">Admin View</div>
+                <h3>All Account Happenings</h3>
+                <p class="text-muted mb-0">ADMIN sees activity from both Kendra and Roberto accounts.</p>
+            </div>
+            <a class="btn btn-soft" href="<?= pageUrl('reports.php') ?>"><i class="bi bi-file-earmark-bar-graph"></i> Full Report</a>
+        </div>
+        <div class="table-responsive mt-3">
+            <table class="table soft-table">
+                <thead>
+                <tr>
+                    <th>Date / Time</th>
+                    <th>Account</th>
+                    <th>Activity</th>
+                    <th>Details</th>
+                    <th>Amount</th>
+                    <th>Status</th>
+                </tr>
+                </thead>
+                <tbody>
+                <?php foreach ($adminHappenings as $item): ?>
+                    <tr>
+                        <td><?= e((new DateTime($item['happened_at']))->format('M d, Y h:i A')) ?></td>
+                        <td><?= e($item['account_name']) ?></td>
+                        <td><?= e($item['activity_type']) ?></td>
+                        <td><?= e($item['title']) ?></td>
+                        <td><?= money($item['amount']) ?></td>
+                        <td><span class="status-pill <?= e(statusClass($item['status'])) ?>"><?= e($item['status']) ?></span></td>
+                    </tr>
+                <?php endforeach; ?>
+                <?php if (!$adminHappenings): ?>
+                    <tr><td colspan="6"><div class="empty-state">No account activity yet. Add a deposit to start tracking happenings.</div></td></tr>
+                <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+<?php endif; ?>
 
 <div class="row g-4 mt-1">
     <div class="col-12 col-xl-7">
