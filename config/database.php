@@ -9,13 +9,19 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-const APP_NAME = 'ATM Audit and Liquidation Management System';
-const BASE_URL = '/atm-audit-liquidation-system';
-const DB_HOST = '127.0.0.1';
-const DB_NAME = 'atm_audit_liquidation';
-const DB_USER = 'root';
-const DB_PASS = '';
-const DB_PORT = '3306';
+function appEnv(string $key, string $default = ''): string
+{
+    $value = getenv($key);
+    return ($value === false || $value === '') ? $default : (string) $value;
+}
+
+define('APP_NAME', 'ATM Audit and Liquidation Management System');
+define('BASE_URL', rtrim(appEnv('APP_BASE_URL', '/atm-audit-liquidation-system'), '/'));
+define('DB_HOST', appEnv('DB_HOST', '127.0.0.1'));
+define('DB_NAME', appEnv('DB_NAME', 'atm_audit_liquidation'));
+define('DB_USER', appEnv('DB_USER', 'root'));
+define('DB_PASS', appEnv('DB_PASS', ''));
+define('DB_PORT', appEnv('DB_PORT', '3306'));
 
 const STATUS_OPTIONS = [
     'Paid',

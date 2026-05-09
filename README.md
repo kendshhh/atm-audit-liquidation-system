@@ -55,6 +55,12 @@ atm-audit-liquidation-system/
 4. Import `database.sql`.
 5. Open `http://localhost/atm-audit-liquidation-system`.
 
+## Public Deployment
+
+GitHub stores the source code only. This app needs PHP and MySQL to run publicly.
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for public hosting steps.
+
 ## Fixed Login Accounts
 
 - Admin: `ADMIN` / `Admin123`
