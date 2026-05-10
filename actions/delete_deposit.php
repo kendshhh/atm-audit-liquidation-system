@@ -36,6 +36,11 @@ try {
     $allocations = $allocationStmt->fetchAll();
 
     $allocationIds = array_map(static fn(array $row): int => (int) $row['id'], $allocations);
+    $transferIds = array_values(array_filter(array_map(static fn(array $row): int => (int) ($row['related_transfer_id'] ?? 0), $allocations)));
+    foreach ($transferIds as $transferId) {
+        softDeleteTransferRecords($pdo, $transferId);
+    }
+
     if ($allocationIds) {
         $placeholders = implode(',', array_fill(0, count($allocationIds), '?'));
         $deleteAllocationTxns = $pdo->prepare(

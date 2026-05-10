@@ -58,6 +58,7 @@ CREATE TABLE allocations (
     remaining_amount DECIMAL(15,2) NOT NULL DEFAULT 0.00,
     status ENUM('Paid', 'Pending', 'Not Yet Paid', 'Partially Paid', 'Saved', 'Transferred', 'Borrowed', 'Withdrawn') NOT NULL DEFAULT 'Not Yet Paid',
     notes TEXT NULL,
+    related_transfer_id INT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NULL,
     deleted_at DATETIME NULL,
@@ -70,7 +71,7 @@ CREATE TABLE allocations (
 CREATE TABLE transfers (
     id INT AUTO_INCREMENT PRIMARY KEY,
     from_account_id INT NOT NULL,
-    to_account_id INT NOT NULL,
+    to_account_id INT NULL,
     transfer_date DATE NOT NULL,
     amount DECIMAL(15,2) NOT NULL,
     notes TEXT NULL,

@@ -30,8 +30,8 @@ renderHeader('Dashboard');
             <div><span>Total Minus</span><strong><?= money($overall['total_minus']) ?></strong></div>
             <div><span>Remaining Payments</span><strong><?= money($remainingPayments) ?></strong></div>
             <div><span>Saved / Reserved</span><strong><?= money($overall['saved']) ?></strong></div>
-            <div><span>Borrowed Tracking</span><strong><?= money($overall['borrowed']) ?></strong></div>
-            <div><span>Transferred / Reserved</span><strong><?= money($overall['transferred']) ?></strong></div>
+            <div><span>Borrowed Minus</span><strong><?= money($overall['borrowed']) ?></strong></div>
+            <div><span>Transferred</span><strong><?= money($overall['transferred']) ?></strong></div>
         </div>
         <div class="quick-action-grid">
             <button class="btn btn-primary-soft btn-lg" data-bs-toggle="modal" data-bs-target="#addDepositModal">

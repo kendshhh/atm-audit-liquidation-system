@@ -72,7 +72,7 @@
                                 <div class="col-lg-2">
                                     <label class="form-label">Status</label>
                                     <select name="status[]" class="form-select" required>
-                                        <?php foreach (array_filter(STATUS_OPTIONS, static fn(string $status): bool => $status !== 'Partially Paid') as $status): ?>
+                                        <?php foreach (array_filter(STATUS_OPTIONS, static fn(string $status): bool => !in_array($status, ['Partially Paid', 'Transferred'], true)) as $status): ?>
                                             <option value="<?= e($status) ?>" <?= $status === 'Not Yet Paid' ? 'selected' : '' ?>><?= e($status) ?></option>
                                         <?php endforeach; ?>
                                     </select>

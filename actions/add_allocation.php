@@ -19,6 +19,8 @@ $paidCentsInput = amountToCents($_POST['amount_paid'] ?? 0);
 $status = trim((string) ($_POST['status'] ?? 'Not Yet Paid'));
 $notes = trim((string) ($_POST['notes'] ?? ''));
 $date = trim((string) ($_POST['transaction_date'] ?? today()));
+$transferToRaw = (string) ($_POST['transfer_to_account_id'] ?? '');
+$transferToAccountId = $transferToRaw === 'other' ? null : (int) $transferToRaw;
 
 if (!$accountId || !findAccount($accountId) || $purpose === '' || $category === '' || $allocatedCents <= 0 || !in_array($status, STATUS_OPTIONS, true)) {
     flash('error', 'Complete the payable details with valid values.');
@@ -30,20 +32,38 @@ if ($status === 'Borrowed' && $paidCentsInput > 0) {
     redirect(pageUrl('allocations.php'));
 }
 
+if ($status === 'Transferred' && ($transferToRaw === '' || $transferToAccountId === $accountId || ($transferToAccountId !== null && !findAccount($transferToAccountId, false)))) {
+    flash('error', 'Choose a different account to receive the transfer.');
+    redirect(pageUrl('allocations.php'));
+}
+
 try {
     [$status, $paidCents, $remainingCents] = normalizeAllocationEditAmounts($status, $allocatedCents, $paidCentsInput);
-    $deductionCents = allocationDeductionCents($status, $paidCents);
+    $deductionCents = allocationDeductionCents($status, $paidCents, $allocatedCents);
 
-    if ($status !== 'Borrowed' && $deductionCents > 0 && !accountHasBalance($accountId, $deductionCents)) {
-        throw new RuntimeException('Insufficient account balance for this payable payment.');
+    if ($deductionCents > 0 && !accountHasBalance($accountId, $deductionCents)) {
+        throw new RuntimeException('Insufficient account balance for this payable.');
     }
 
     $pdo = db();
     $pdo->beginTransaction();
 
+    $transferId = null;
+    if ($status === 'Transferred') {
+        $transferId = createTransferRecords(
+            $pdo,
+            $accountId,
+            $transferToAccountId,
+            $date ?: today(),
+            $allocatedCents,
+            $purpose,
+            currentUser()['id']
+        );
+    }
+
     $stmt = $pdo->prepare(
-        'INSERT INTO allocations (deposit_id, account_id, purpose, category, allocated_amount, amount_paid, remaining_amount, status, notes)
-         VALUES (NULL, :account_id, :purpose, :category, :allocated_amount, :amount_paid, :remaining_amount, :status, :notes)'
+        'INSERT INTO allocations (deposit_id, account_id, purpose, category, allocated_amount, amount_paid, remaining_amount, status, notes, related_transfer_id)
+         VALUES (NULL, :account_id, :purpose, :category, :allocated_amount, :amount_paid, :remaining_amount, :status, :notes, :transfer_id)'
     );
     $stmt->execute([
         'account_id' => $accountId,
@@ -54,10 +74,11 @@ try {
         'remaining_amount' => centsToDecimal($remainingCents),
         'status' => $status,
         'notes' => $notes,
+        'transfer_id' => $transferId,
     ]);
     $allocationId = (int) $pdo->lastInsertId();
 
-    if ($status !== 'Borrowed' && $deductionCents > 0) {
+    if (allocationCreatesPaymentLedger($status) && $deductionCents > 0) {
         $txnType = $status === 'Withdrawn' ? 'Withdrawal' : 'Payment';
         $txn = $pdo->prepare(
             'INSERT INTO transactions (account_id, transaction_date, transaction_type, category, amount, description, status, related_allocation_id, created_by)
@@ -83,8 +104,12 @@ try {
         'allocated_amount' => centsToDecimal($allocatedCents),
         'amount_paid' => centsToDecimal($paidCents),
         'remaining_amount' => centsToDecimal($remainingCents),
+        'related_transfer_id' => $transferId,
     ]);
     recalculateAccount($accountId);
+    if ($transferId !== null && $transferToAccountId !== null) {
+        recalculateAccount($transferToAccountId);
+    }
     $pdo->commit();
     flash('success', 'Payable added successfully.');
 } catch (Throwable $e) {

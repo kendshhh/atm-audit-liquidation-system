@@ -25,7 +25,7 @@ if (!in_array($type, ['Payment', 'Withdrawal', 'Borrowed', 'Adjustment'], true))
     redirect(pageUrl('transactions.php'));
 }
 
-if (in_array($type, ['Payment', 'Withdrawal', 'Adjustment'], true) && !accountHasBalance($accountId, $amountCents)) {
+if (in_array($type, ['Payment', 'Withdrawal', 'Adjustment', 'Borrowed'], true) && !accountHasBalance($accountId, $amountCents)) {
     flash('error', 'Insufficient balance.');
     redirect(pageUrl('transactions.php'));
 }

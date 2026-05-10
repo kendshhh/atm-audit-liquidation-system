@@ -8,7 +8,7 @@ $stmt = db()->prepare(
     'SELECT tr.*, fa.account_name AS from_name, ta.account_name AS to_name
      FROM transfers tr
      JOIN accounts fa ON fa.id = tr.from_account_id
-     JOIN accounts ta ON ta.id = tr.to_account_id
+     LEFT JOIN accounts ta ON ta.id = tr.to_account_id
      WHERE tr.deleted_at IS NULL
      ' . $transferAccess . '
      ORDER BY tr.transfer_date DESC, tr.id DESC'
@@ -39,7 +39,7 @@ renderHeader('Transfers');
                     <thead><tr><th>Date</th><th>From</th><th>To</th><th>Amount</th><th>Notes</th></tr></thead>
                     <tbody>
                     <?php foreach ($rows as $row): ?>
-                        <tr><td><?= e($row['transfer_date']) ?></td><td><?= e($row['from_name']) ?></td><td><?= e($row['to_name']) ?></td><td><?= money($row['amount']) ?></td><td><?= e($row['notes']) ?></td></tr>
+                        <tr><td><?= e($row['transfer_date']) ?></td><td><?= e($row['from_name']) ?></td><td><?= e($row['to_name'] ?? 'Others') ?></td><td><?= money($row['amount']) ?></td><td><?= e($row['notes']) ?></td></tr>
                     <?php endforeach; ?>
                     <?php if (!$rows): ?><tr><td colspan="5"><div class="empty-state">No transfers found yet.</div></td></tr><?php endif; ?>
                     </tbody>
@@ -73,6 +73,7 @@ renderHeader('Transfers');
                             <select name="to_account_id" class="form-select" required>
                                 <option value="">Choose receiver</option>
                                 <?php foreach ($receiverAccounts as $account): ?><option value="<?= (int) $account['id'] ?>"><?= e($account['account_name']) ?></option><?php endforeach; ?>
+                                <option value="other">Others</option>
                             </select>
                         </div>
                         <div class="col-md-4"><label class="form-label">Amount</label><input type="number" name="amount" class="form-control" min="0.01" step="0.01" required></div>

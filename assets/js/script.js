@@ -254,16 +254,40 @@ if (window.openDepositModal && document.getElementById('addDepositModal')) {
 
 var statusModal = document.getElementById('statusModal');
 if (statusModal) {
+    var syncStatusTransferFields = function () {
+        var statusValue = document.getElementById('statusValue');
+        var wrap = document.getElementById('statusTransferToWrap');
+        var select = document.getElementById('statusTransferToAccount');
+        var transferred = statusValue && statusValue.value === 'Transferred';
+        if (wrap) {
+            wrap.classList.toggle('d-none', !transferred);
+        }
+        if (select) {
+            select.required = !!transferred;
+        }
+    };
+
     var updateStatusPaymentPreview = function () {
         var allocatedField = document.getElementById('statusAllocated');
         var paidField = document.getElementById('statusPaid');
         var preview = document.getElementById('statusPaymentPreview');
+        var statusValue = document.getElementById('statusValue');
         if (!allocatedField || !paidField || !preview) {
             return;
         }
         var allocated = parseFloat(allocatedField.dataset.amount || '0');
         var paid = parseFloat(paidField.value || '0');
         var difference = allocated - paid;
+        if (statusValue && statusValue.value === 'Transferred') {
+            paidField.value = '0.00';
+            preview.value = 'Transfers ' + peso(allocated) + ' to the selected account';
+            return;
+        }
+        if (statusValue && statusValue.value === 'Borrowed') {
+            paidField.value = '0.00';
+            preview.value = 'Borrowed will minus ' + peso(allocated) + ' from the balance';
+            return;
+        }
         if (paid <= 0) {
             preview.value = 'No payment recorded';
         } else if (difference > 0.009) {
@@ -285,7 +309,9 @@ if (statusModal) {
         allocatedField.value = peso(allocated);
         document.getElementById('statusValue').value = button.dataset.status || 'Not Yet Paid';
         document.getElementById('statusPaid').value = button.dataset.paid || '0.00';
+        document.getElementById('statusTransferToAccount').value = button.dataset.transferTo || '';
         document.getElementById('statusNotes').value = button.dataset.notes || '';
+        syncStatusTransferFields();
         updateStatusPaymentPreview();
     });
 
@@ -293,12 +319,22 @@ if (statusModal) {
     if (statusPaidField) {
         statusPaidField.addEventListener('input', updateStatusPaymentPreview);
     }
+    var statusValueField = document.getElementById('statusValue');
+    if (statusValueField) {
+        statusValueField.addEventListener('change', function () {
+            syncStatusTransferFields();
+            updateStatusPaymentPreview();
+        });
+        syncStatusTransferFields();
+    }
 }
 
 var newAllocationAmount = document.getElementById('newAllocationAmount');
 var newAllocationStatus = document.getElementById('newAllocationStatus');
 var newAllocationPaid = document.getElementById('newAllocationPaid');
 var newAllocationPreview = document.getElementById('newAllocationPreview');
+var newTransferToWrap = document.getElementById('newTransferToWrap');
+var newTransferToAccount = document.getElementById('newTransferToAccount');
 
 function updateNewAllocationPreview() {
     if (!newAllocationAmount || !newAllocationStatus || !newAllocationPaid || !newAllocationPreview) {
@@ -308,10 +344,24 @@ function updateNewAllocationPreview() {
     var paid = parseFloat(newAllocationPaid.value || '0');
     var status = newAllocationStatus.value || 'Not Yet Paid';
     var difference = allocated - paid;
+    var transferred = status === 'Transferred';
+
+    if (newTransferToWrap) {
+        newTransferToWrap.classList.toggle('d-none', !transferred);
+    }
+    if (newTransferToAccount) {
+        newTransferToAccount.required = transferred;
+    }
+
+    if (transferred) {
+        newAllocationPaid.value = '0.00';
+        newAllocationPreview.value = allocated > 0 ? 'Transfers ' + peso(allocated) + ' to the selected account' : 'Transfer payable';
+        return;
+    }
 
     if (status === 'Borrowed') {
         newAllocationPaid.value = '0.00';
-        newAllocationPreview.value = allocated > 0 ? 'Borrowed payable tracked separately; balance is unchanged' : 'Borrowed payable';
+        newAllocationPreview.value = allocated > 0 ? 'Borrowed will minus ' + peso(allocated) + ' from the balance' : 'Borrowed payable';
         return;
     }
 

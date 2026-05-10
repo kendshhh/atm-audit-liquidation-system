@@ -45,6 +45,10 @@ foreach ($purposes as $i => $purposeValue) {
         flash('error', 'Partially Paid is not supported when adding deposit allocations. Use another status and update it later from Payables.');
         redirect(pageUrl('dashboard.php?open_deposit=1'));
     }
+    if ($status === 'Transferred') {
+        flash('error', 'Transferred allocations need a receiving account. Add the allocation first, then mark it Transferred from Payables.');
+        redirect(pageUrl('dashboard.php?open_deposit=1'));
+    }
 
     [$paidCents, $remainingCents] = normalizeAllocationAmounts($status, $amountCents, 0);
     $allocations[] = compact('purpose', 'category', 'amountCents', 'paidCents', 'remainingCents', 'status', 'note');

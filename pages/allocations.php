@@ -28,9 +28,10 @@ if ($purposeFilter !== '') {
 $where .= accountAccessCondition('al.account_id');
 $params = bindAccountAccess($params);
 $stmt = db()->prepare(
-    "SELECT al.*, a.account_name
+    "SELECT al.*, a.account_name, tr.to_account_id AS transfer_to_account_id
      FROM allocations al
      JOIN accounts a ON a.id = al.account_id
+     LEFT JOIN transfers tr ON tr.id = al.related_transfer_id
      $where
      ORDER BY al.created_at DESC, al.id DESC"
 );
@@ -45,6 +46,7 @@ $categoryStmt = db()->prepare(
 );
 $categoryStmt->execute(bindAccountAccess());
 $filterCategories = array_filter(array_map(static fn(array $row): string => (string) $row['category'], $categoryStmt->fetchAll()));
+$transferReceiverAccounts = fetchAccounts(false);
 $recalculateReturn = pageUrl('allocations.php');
 if (!empty($_SERVER['QUERY_STRING'])) {
     $recalculateReturn .= '?' . (string) $_SERVER['QUERY_STRING'];
@@ -94,6 +96,7 @@ renderHeader('Payables');
                             data-allocated="<?= e((string) $row['allocated_amount']) ?>"
                             data-status="<?= e($row['status']) ?>"
                             data-paid="<?= e($row['amount_paid']) ?>"
+                            data-transfer-to="<?= (int) ($row['transfer_to_account_id'] ?? 0) ?>"
                             data-notes="<?= e($row['notes']) ?>">Edit</button>
                     </td>
                 </tr>
@@ -154,6 +157,16 @@ renderHeader('Payables');
                             <?php foreach (STATUS_OPTIONS as $status): ?>
                                 <option value="<?= e($status) ?>" <?= $status === 'Not Yet Paid' ? 'selected' : '' ?>><?= e($status) ?></option>
                             <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="mb-3" id="newTransferToWrap">
+                        <label class="form-label">Transfer To Account</label>
+                        <select name="transfer_to_account_id" id="newTransferToAccount" class="form-select">
+                            <option value="">Choose receiver</option>
+                            <?php foreach ($transferReceiverAccounts as $account): ?>
+                                <option value="<?= (int) $account['id'] ?>"><?= e($account['account_name']) ?></option>
+                            <?php endforeach; ?>
+                            <option value="other">Others</option>
                         </select>
                     </div>
                     <div class="mb-3">
@@ -242,6 +255,16 @@ renderHeader('Payables');
                         <label class="form-label">Status</label>
                         <select name="status" id="statusValue" class="form-select">
                             <?php foreach (STATUS_OPTIONS as $status): ?><option value="<?= e($status) ?>"><?= e($status) ?></option><?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="mb-3" id="statusTransferToWrap">
+                        <label class="form-label">Transfer To Account</label>
+                        <select name="transfer_to_account_id" id="statusTransferToAccount" class="form-select">
+                            <option value="">Choose receiver</option>
+                            <?php foreach ($transferReceiverAccounts as $account): ?>
+                                <option value="<?= (int) $account['id'] ?>"><?= e($account['account_name']) ?></option>
+                            <?php endforeach; ?>
+                            <option value="other">Others</option>
                         </select>
                     </div>
                     <div class="mb-3"><label class="form-label">Amount Paid</label><input name="amount_paid" id="statusPaid" type="number" min="0" step="0.01" class="form-control"></div>

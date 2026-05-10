@@ -444,6 +444,10 @@ function normalizeAllocationAmounts(string $status, int $allocatedCents, int $pa
 
 function normalizeAllocationEditAmounts(string $status, int $allocatedCents, int $paidCents): array
 {
+    if (in_array($status, ['Transferred', 'Borrowed'], true)) {
+        return [$status, 0, $allocatedCents];
+    }
+
     if ($paidCents > 0) {
         if ($status !== 'Withdrawn') {
             $status = $paidCents < $allocatedCents ? 'Partially Paid' : 'Paid';
@@ -459,21 +463,49 @@ function normalizeAllocationEditAmounts(string $status, int $allocatedCents, int
     return [$status, 0, $allocatedCents];
 }
 
-function allocationDeductionCents(string $status, int $amountPaidCents): int
+function allocationDeductionCents(string $status, int $amountPaidCents, int $allocatedCents = 0): int
 {
-    if (in_array($status, ['Paid', 'Withdrawn', 'Partially Paid'], true)) {
-        return $amountPaidCents;
-    }
-    return 0;
+    return match ($status) {
+        'Paid', 'Withdrawn', 'Partially Paid' => $amountPaidCents,
+        'Transferred', 'Borrowed' => $allocatedCents,
+        default => 0,
+    };
+}
+
+function allocationRemainingDueCents(string $status, int $remainingCents): int
+{
+    return in_array($status, ['Pending', 'Not Yet Paid', 'Partially Paid', 'Withdrawn'], true)
+        ? $remainingCents
+        : 0;
+}
+
+function allocationSavedCents(string $status, int $remainingCents): int
+{
+    return $status === 'Saved' ? $remainingCents : 0;
+}
+
+function allocationTransferredCents(string $status, int $allocatedCents): int
+{
+    return $status === 'Transferred' ? $allocatedCents : 0;
+}
+
+function allocationBorrowedCents(string $status, int $allocatedCents): int
+{
+    return $status === 'Borrowed' ? $allocatedCents : 0;
+}
+
+function allocationCreatesPaymentLedger(string $status): bool
+{
+    return in_array($status, ['Paid', 'Withdrawn', 'Partially Paid'], true);
 }
 
 function transactionNetCents(string $type, int $amountCents): int
 {
-    if (in_array($type, ['Deposit', 'Transfer In', 'Borrowed'], true)) {
+    if (in_array($type, ['Deposit', 'Transfer In'], true)) {
         return $amountCents;
     }
 
-    if (in_array($type, ['Payment', 'Withdrawal', 'Transfer Out', 'Adjustment'], true)) {
+    if (in_array($type, ['Payment', 'Withdrawal', 'Transfer Out', 'Adjustment', 'Borrowed'], true)) {
         return -$amountCents;
     }
 
@@ -482,11 +514,7 @@ function transactionNetCents(string $type, int $amountCents): int
 
 function manualTransactionNetCents(string $type, int $amountCents): int
 {
-    if (in_array($type, ['Borrowed'], true)) {
-        return $amountCents;
-    }
-
-    if (in_array($type, ['Payment', 'Withdrawal', 'Adjustment'], true)) {
+    if (in_array($type, ['Payment', 'Withdrawal', 'Adjustment', 'Borrowed'], true)) {
         return -$amountCents;
     }
 
@@ -501,15 +529,25 @@ function accountComputedBalanceCents(int $accountId): int
     $depositStmt->execute(['id' => $accountId]);
     $deposits = amountToCents($depositStmt->fetch()['total'] ?? 0);
 
-    $deductStmt = $pdo->prepare(
-        'SELECT COALESCE(SUM(amount_paid), 0) AS total
+    $allocationStmt = $pdo->prepare(
+        'SELECT status, allocated_amount, amount_paid, related_transfer_id
          FROM allocations
-         WHERE account_id = :id
-           AND deleted_at IS NULL
-           AND status IN ("Paid", "Withdrawn", "Partially Paid")'
+         WHERE account_id = :id AND deleted_at IS NULL'
     );
-    $deductStmt->execute(['id' => $accountId]);
-    $deductions = amountToCents($deductStmt->fetch()['total'] ?? 0);
+    $allocationStmt->execute(['id' => $accountId]);
+    $deductions = 0;
+    foreach ($allocationStmt->fetchAll() as $allocation) {
+        $status = (string) $allocation['status'];
+        if ($status === 'Transferred' && !empty($allocation['related_transfer_id'])) {
+            continue;
+        }
+
+        $deductions += allocationDeductionCents(
+            $status,
+            amountToCents($allocation['amount_paid'] ?? 0),
+            amountToCents($allocation['allocated_amount'] ?? 0)
+        );
+    }
 
     $transferOutStmt = $pdo->prepare('SELECT COALESCE(SUM(amount), 0) AS total FROM transfers WHERE from_account_id = :id AND deleted_at IS NULL');
     $transferOutStmt->execute(['id' => $accountId]);
@@ -575,6 +613,65 @@ function recalculateRunningBalances(int $accountId): void
 function accountHasBalance(int $accountId, int $requiredCents): bool
 {
     return accountComputedBalanceCents($accountId) >= $requiredCents;
+}
+
+function createTransferRecords(
+    PDO $pdo,
+    int $fromAccountId,
+    ?int $toAccountId,
+    string $date,
+    int $amountCents,
+    string $notes,
+    ?int $createdBy
+): int {
+    $stmt = $pdo->prepare(
+        'INSERT INTO transfers (from_account_id, to_account_id, transfer_date, amount, notes, created_by)
+         VALUES (:from_id, :to_id, :date, :amount, :notes, :created_by)'
+    );
+    $stmt->execute([
+        'from_id' => $fromAccountId,
+        'to_id' => $toAccountId,
+        'date' => $date,
+        'amount' => centsToDecimal($amountCents),
+        'notes' => $notes,
+        'created_by' => $createdBy,
+    ]);
+    $transferId = (int) $pdo->lastInsertId();
+
+    $txn = $pdo->prepare(
+        'INSERT INTO transactions (account_id, transaction_date, transaction_type, category, amount, description, status, related_transfer_id, created_by)
+         VALUES (:account_id, :date, :type, "Transfer", :amount, :description, "Transferred", :transfer_id, :created_by)'
+    );
+    $txn->execute([
+        'account_id' => $fromAccountId,
+        'date' => $date,
+        'type' => 'Transfer Out',
+        'amount' => centsToDecimal($amountCents),
+        'description' => $notes ?: 'Transfer sent',
+        'transfer_id' => $transferId,
+        'created_by' => $createdBy,
+    ]);
+    if ($toAccountId !== null) {
+        $txn->execute([
+            'account_id' => $toAccountId,
+            'date' => $date,
+            'type' => 'Transfer In',
+            'amount' => centsToDecimal($amountCents),
+            'description' => $notes ?: 'Transfer received',
+            'transfer_id' => $transferId,
+            'created_by' => $createdBy,
+        ]);
+    }
+
+    return $transferId;
+}
+
+function softDeleteTransferRecords(PDO $pdo, int $transferId): void
+{
+    $pdo->prepare('UPDATE transactions SET deleted_at = NOW() WHERE related_transfer_id = :id AND deleted_at IS NULL')
+        ->execute(['id' => $transferId]);
+    $pdo->prepare('UPDATE transfers SET deleted_at = NOW() WHERE id = :id AND deleted_at IS NULL')
+        ->execute(['id' => $transferId]);
 }
 
 function transactionCanBeEdited(array $transaction): bool
@@ -660,17 +757,7 @@ function accountStats(int $accountId): array
     $depositStmt->execute(['id' => $accountId]);
 
     $allocStmt = $pdo->prepare(
-        'SELECT
-            COALESCE(SUM(CASE WHEN status IN ("Paid", "Partially Paid") THEN amount_paid ELSE 0 END), 0) paid,
-            COALESCE(SUM(CASE WHEN status = "Withdrawn" THEN amount_paid ELSE 0 END), 0) withdrawn,
-            COALESCE(SUM(CASE WHEN status IN ("Paid", "Withdrawn", "Partially Paid") THEN amount_paid ELSE 0 END), 0) total_minus,
-            COALESCE(SUM(CASE WHEN status IN ("Pending", "Not Yet Paid", "Partially Paid", "Withdrawn") THEN remaining_amount ELSE 0 END), 0) remaining_due,
-            COALESCE(SUM(CASE WHEN status = "Pending" THEN remaining_amount ELSE 0 END), 0) pending,
-            COALESCE(SUM(CASE WHEN status = "Not Yet Paid" THEN remaining_amount ELSE 0 END), 0) not_yet_paid,
-            COALESCE(SUM(CASE WHEN status = "Partially Paid" THEN remaining_amount ELSE 0 END), 0) partially_paid,
-            COALESCE(SUM(CASE WHEN status = "Saved" THEN remaining_amount ELSE 0 END), 0) saved,
-            COALESCE(SUM(CASE WHEN status = "Borrowed" THEN remaining_amount ELSE 0 END), 0) borrowed,
-            COALESCE(SUM(CASE WHEN status = "Transferred" THEN remaining_amount ELSE 0 END), 0) transferred
+        'SELECT status, allocated_amount, amount_paid, remaining_amount, related_transfer_id
          FROM allocations
          WHERE account_id = :id AND deleted_at IS NULL'
     );
@@ -690,23 +777,85 @@ function accountStats(int $accountId): array
         'where_to_id' => $accountId,
     ]);
 
+    $manualStmt = $pdo->prepare(
+        'SELECT
+            COALESCE(SUM(CASE WHEN transaction_type = "Payment" THEN amount ELSE 0 END), 0) payment,
+            COALESCE(SUM(CASE WHEN transaction_type = "Withdrawal" THEN amount ELSE 0 END), 0) withdrawal,
+            COALESCE(SUM(CASE WHEN transaction_type = "Borrowed" THEN amount ELSE 0 END), 0) borrowed,
+            COALESCE(SUM(CASE WHEN transaction_type IN ("Payment", "Withdrawal", "Adjustment", "Borrowed") THEN amount ELSE 0 END), 0) total_minus
+         FROM transactions
+         WHERE account_id = :id
+           AND deleted_at IS NULL
+           AND related_deposit_id IS NULL
+           AND related_transfer_id IS NULL
+           AND related_allocation_id IS NULL'
+    );
+    $manualStmt->execute(['id' => $accountId]);
+
+    $allocationTotals = [
+        'paid' => 0,
+        'withdrawn' => 0,
+        'total_minus' => 0,
+        'remaining_due' => 0,
+        'pending' => 0,
+        'not_yet_paid' => 0,
+        'partially_paid' => 0,
+        'saved' => 0,
+        'borrowed' => 0,
+        'transferred' => 0,
+    ];
+    foreach ($allocStmt->fetchAll() as $allocation) {
+        $status = (string) $allocation['status'];
+        $allocatedCents = amountToCents($allocation['allocated_amount'] ?? 0);
+        $paidCents = amountToCents($allocation['amount_paid'] ?? 0);
+        $remainingCents = amountToCents($allocation['remaining_amount'] ?? 0);
+
+        if (in_array($status, ['Paid', 'Partially Paid'], true)) {
+            $allocationTotals['paid'] += $paidCents;
+        }
+        if ($status === 'Withdrawn') {
+            $allocationTotals['withdrawn'] += $paidCents;
+        }
+        if ($status === 'Pending') {
+            $allocationTotals['pending'] += $remainingCents;
+        }
+        if ($status === 'Not Yet Paid') {
+            $allocationTotals['not_yet_paid'] += $remainingCents;
+        }
+        if ($status === 'Partially Paid') {
+            $allocationTotals['partially_paid'] += $remainingCents;
+        }
+
+        $hasLinkedTransfer = !empty($allocation['related_transfer_id']);
+        if (!($status === 'Transferred' && $hasLinkedTransfer)) {
+            $allocationTotals['total_minus'] += allocationDeductionCents($status, $paidCents, $allocatedCents);
+        }
+        $allocationTotals['remaining_due'] += allocationRemainingDueCents($status, $remainingCents);
+        $allocationTotals['saved'] += allocationSavedCents($status, $remainingCents);
+        $allocationTotals['borrowed'] += allocationBorrowedCents($status, $allocatedCents);
+        if (!($status === 'Transferred' && $hasLinkedTransfer)) {
+            $allocationTotals['transferred'] += allocationTransferredCents($status, $allocatedCents);
+        }
+    }
+
     $account = findAccount($accountId);
-    $alloc = $allocStmt->fetch() ?: [];
     $transfer = $transferStmt->fetch() ?: [];
+    $manual = $manualStmt->fetch() ?: [];
+    $transferOut = (float) ($transfer['transfer_out'] ?? 0);
 
     return [
         'balance' => (float) ($account['current_balance'] ?? 0),
         'deposited' => (float) ($depositStmt->fetch()['total'] ?? 0),
-        'paid' => (float) ($alloc['paid'] ?? 0),
-        'withdrawn' => (float) ($alloc['withdrawn'] ?? 0),
-        'total_minus' => (float) ($alloc['total_minus'] ?? 0),
-        'remaining_due' => (float) ($alloc['remaining_due'] ?? 0),
-        'pending' => (float) ($alloc['pending'] ?? 0),
-        'not_yet_paid' => (float) ($alloc['not_yet_paid'] ?? 0),
-        'partially_paid' => (float) ($alloc['partially_paid'] ?? 0),
-        'saved' => (float) ($alloc['saved'] ?? 0),
-        'borrowed' => (float) ($alloc['borrowed'] ?? 0),
-        'transferred' => (float) ($alloc['transferred'] ?? 0) + (float) ($transfer['transfer_out'] ?? 0),
+        'paid' => $allocationTotals['paid'] / 100 + (float) ($manual['payment'] ?? 0),
+        'withdrawn' => $allocationTotals['withdrawn'] / 100 + (float) ($manual['withdrawal'] ?? 0),
+        'total_minus' => $allocationTotals['total_minus'] / 100 + (float) ($manual['total_minus'] ?? 0) + $transferOut,
+        'remaining_due' => $allocationTotals['remaining_due'] / 100,
+        'pending' => $allocationTotals['pending'] / 100,
+        'not_yet_paid' => $allocationTotals['not_yet_paid'] / 100,
+        'partially_paid' => $allocationTotals['partially_paid'] / 100,
+        'saved' => $allocationTotals['saved'] / 100,
+        'borrowed' => $allocationTotals['borrowed'] / 100 + (float) ($manual['borrowed'] ?? 0),
+        'transferred' => $allocationTotals['transferred'] / 100 + $transferOut,
         'transfer_in' => (float) ($transfer['transfer_in'] ?? 0),
     ];
 }
