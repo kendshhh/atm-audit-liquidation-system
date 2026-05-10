@@ -48,7 +48,8 @@ try {
     ]);
 
     $txnType = $status === 'Withdrawn' ? 'Withdrawal' : 'Payment';
-    if (in_array($status, ['Paid', 'Withdrawn', 'Partially Paid'], true)) {
+    $deltaDeduction = $newDeduction - $oldDeduction;
+    if (in_array($status, ['Paid', 'Withdrawn', 'Partially Paid'], true) && $deltaDeduction > 0) {
         $txn = $pdo->prepare(
             'INSERT INTO transactions (account_id, transaction_date, transaction_type, category, amount, description, status, related_allocation_id, created_by)
              VALUES (:account_id, :date, :type, :category, :amount, :description, :status, :allocation_id, :created_by)'
@@ -58,7 +59,7 @@ try {
             'date' => today(),
             'type' => $txnType,
             'category' => $old['category'],
-            'amount' => centsToDecimal($paidCents),
+            'amount' => centsToDecimal($deltaDeduction),
             'description' => $old['purpose'],
             'status' => $status,
             'allocation_id' => $id,

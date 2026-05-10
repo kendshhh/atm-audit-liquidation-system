@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/../config/database.php';
 
-if (currentUser()) {
+if ($_SERVER['REQUEST_METHOD'] !== 'POST' && currentUser()) {
     redirect(BASE_URL . '/pages/dashboard.php');
 }
 
@@ -85,7 +85,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
             <button class="btn btn-primary-soft w-100" type="submit">Login</button>
         </form>
-        <div class="demo-note">Default accounts: <strong>ADMIN</strong> / <strong>Admin123</strong>, <strong>Kendra</strong> / <strong>Kendra123</strong>, <strong>Roberto</strong> / <strong>Roberto123</strong>.</div>
     </section>
 </main>
 </body>

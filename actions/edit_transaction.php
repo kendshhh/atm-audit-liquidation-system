@@ -43,6 +43,16 @@ if ($date === '' || $amountCents <= 0 || $category === '' || !in_array($type, $t
     redirect(pageUrl('transactions.php'));
 }
 
+$accountId = (int) $transaction['account_id'];
+$currentBalanceCents = accountComputedBalanceCents($accountId);
+$oldNetCents = manualTransactionNetCents((string) $transaction['transaction_type'], amountToCents($transaction['amount']));
+$newNetCents = manualTransactionNetCents($type, $amountCents);
+$projectedBalanceCents = $currentBalanceCents - $oldNetCents + $newNetCents;
+if ($projectedBalanceCents < 0) {
+    flash('error', 'Insufficient balance for this transaction update.');
+    redirect(pageUrl('transactions.php'));
+}
+
 $update = db()->prepare(
     'UPDATE transactions
      SET transaction_date = :transaction_date,

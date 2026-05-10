@@ -49,8 +49,8 @@ const DEFAULT_CATEGORIES = [
 ];
 
 const DEFAULT_SEED_ACCOUNTS = [
-    [1, 'Kendra Abellana ATM Account', 6000.00],
-    [2, 'Roberto Abellana ATM Account', 6500.00],
+    [1, 'Kendra Abellana ATM Account', 0.00],
+    [2, 'Roberto Abellana ATM Account', 0.00],
 ];
 
 const DEFAULT_SEED_USERS = [
@@ -375,6 +375,32 @@ function allocationDeductionCents(string $status, int $amountPaidCents): int
     return 0;
 }
 
+function transactionNetCents(string $type, int $amountCents): int
+{
+    if (in_array($type, ['Deposit', 'Transfer In', 'Borrowed'], true)) {
+        return $amountCents;
+    }
+
+    if (in_array($type, ['Payment', 'Withdrawal', 'Transfer Out', 'Adjustment'], true)) {
+        return -$amountCents;
+    }
+
+    return 0;
+}
+
+function manualTransactionNetCents(string $type, int $amountCents): int
+{
+    if (in_array($type, ['Borrowed'], true)) {
+        return $amountCents;
+    }
+
+    if (in_array($type, ['Payment', 'Withdrawal', 'Adjustment'], true)) {
+        return -$amountCents;
+    }
+
+    return 0;
+}
+
 function accountComputedBalanceCents(int $accountId): int
 {
     $pdo = db();
@@ -401,7 +427,22 @@ function accountComputedBalanceCents(int $accountId): int
     $transferInStmt->execute(['id' => $accountId]);
     $transferIn = amountToCents($transferInStmt->fetch()['total'] ?? 0);
 
-    return $deposits + $transferIn - $transferOut - $deductions;
+    $manualTxnStmt = $pdo->prepare(
+        'SELECT transaction_type, amount
+         FROM transactions
+         WHERE account_id = :id
+           AND deleted_at IS NULL
+           AND related_deposit_id IS NULL
+           AND related_transfer_id IS NULL
+           AND related_allocation_id IS NULL'
+    );
+    $manualTxnStmt->execute(['id' => $accountId]);
+    $manualNet = 0;
+    foreach ($manualTxnStmt->fetchAll() as $txn) {
+        $manualNet += manualTransactionNetCents((string) $txn['transaction_type'], amountToCents($txn['amount']));
+    }
+
+    return $deposits + $transferIn - $transferOut - $deductions + $manualNet;
 }
 
 function recalculateAccount(int $accountId): void
@@ -433,12 +474,8 @@ function recalculateRunningBalances(int $accountId): void
 
     foreach ($stmt->fetchAll() as $txn) {
         $amount = amountToCents($txn['amount']);
-        $type = $txn['transaction_type'];
-        if (in_array($type, ['Deposit', 'Transfer In', 'Borrowed'], true)) {
-            $running += $amount;
-        } elseif (in_array($type, ['Payment', 'Withdrawal', 'Transfer Out'], true)) {
-            $running -= $amount;
-        }
+        $type = (string) $txn['transaction_type'];
+        $running += transactionNetCents($type, $amount);
         $update->execute(['running' => centsToDecimal($running), 'id' => (int) $txn['id']]);
     }
 }

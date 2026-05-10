@@ -1,0 +1,7 @@
+.git
+.gitignore
+exports
+uploads
+*.log
+.env
+node_modules
