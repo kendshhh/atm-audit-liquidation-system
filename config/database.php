@@ -661,8 +661,10 @@ function accountStats(int $accountId): array
 
     $allocStmt = $pdo->prepare(
         'SELECT
-            COALESCE(SUM(CASE WHEN status = "Paid" THEN amount_paid ELSE 0 END), 0) paid,
+            COALESCE(SUM(CASE WHEN status IN ("Paid", "Partially Paid") THEN amount_paid ELSE 0 END), 0) paid,
             COALESCE(SUM(CASE WHEN status = "Withdrawn" THEN amount_paid ELSE 0 END), 0) withdrawn,
+            COALESCE(SUM(CASE WHEN status IN ("Paid", "Withdrawn", "Partially Paid") THEN amount_paid ELSE 0 END), 0) total_minus,
+            COALESCE(SUM(CASE WHEN status IN ("Pending", "Not Yet Paid", "Partially Paid", "Withdrawn") THEN remaining_amount ELSE 0 END), 0) remaining_due,
             COALESCE(SUM(CASE WHEN status = "Pending" THEN remaining_amount ELSE 0 END), 0) pending,
             COALESCE(SUM(CASE WHEN status = "Not Yet Paid" THEN remaining_amount ELSE 0 END), 0) not_yet_paid,
             COALESCE(SUM(CASE WHEN status = "Partially Paid" THEN remaining_amount ELSE 0 END), 0) partially_paid,
@@ -697,6 +699,8 @@ function accountStats(int $accountId): array
         'deposited' => (float) ($depositStmt->fetch()['total'] ?? 0),
         'paid' => (float) ($alloc['paid'] ?? 0),
         'withdrawn' => (float) ($alloc['withdrawn'] ?? 0),
+        'total_minus' => (float) ($alloc['total_minus'] ?? 0),
+        'remaining_due' => (float) ($alloc['remaining_due'] ?? 0),
         'pending' => (float) ($alloc['pending'] ?? 0),
         'not_yet_paid' => (float) ($alloc['not_yet_paid'] ?? 0),
         'partially_paid' => (float) ($alloc['partially_paid'] ?? 0),

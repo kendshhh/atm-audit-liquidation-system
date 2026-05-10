@@ -5,6 +5,8 @@ requireLogin();
 
 $accountFilter = (int) ($_GET['account_id'] ?? 0);
 $statusFilter = trim($_GET['status'] ?? '');
+$categoryFilter = trim((string) ($_GET['category'] ?? ''));
+$purposeFilter = trim((string) ($_GET['purpose'] ?? ''));
 $where = 'WHERE al.deleted_at IS NULL';
 $params = [];
 if ($accountFilter > 0) {
@@ -14,6 +16,14 @@ if ($accountFilter > 0) {
 if ($statusFilter !== '' && in_array($statusFilter, STATUS_OPTIONS, true)) {
     $where .= ' AND al.status = :status';
     $params['status'] = $statusFilter;
+}
+if ($categoryFilter !== '') {
+    $where .= ' AND al.category = :category';
+    $params['category'] = $categoryFilter;
+}
+if ($purposeFilter !== '') {
+    $where .= ' AND al.purpose LIKE :purpose';
+    $params['purpose'] = '%' . $purposeFilter . '%';
 }
 $where .= accountAccessCondition('al.account_id');
 $params = bindAccountAccess($params);
@@ -26,10 +36,31 @@ $stmt = db()->prepare(
 );
 $stmt->execute($params);
 $rows = $stmt->fetchAll();
+$categoryStmt = db()->prepare(
+    'SELECT DISTINCT al.category
+     FROM allocations al
+     WHERE al.deleted_at IS NULL
+       ' . accountAccessCondition('al.account_id') . '
+     ORDER BY al.category ASC'
+);
+$categoryStmt->execute(bindAccountAccess());
+$filterCategories = array_filter(array_map(static fn(array $row): string => (string) $row['category'], $categoryStmt->fetchAll()));
+$recalculateReturn = pageUrl('allocations.php');
+if (!empty($_SERVER['QUERY_STRING'])) {
+    $recalculateReturn .= '?' . (string) $_SERVER['QUERY_STRING'];
+}
 
 renderHeader('Payables');
 ?>
 <div class="page-actions">
+    <form method="post" action="<?= actionUrl('recalculate.php') ?>" class="confirm-form">
+        <input type="hidden" name="csrf_token" value="<?= e(csrfToken()) ?>">
+        <input type="hidden" name="return_to" value="<?= e($recalculateReturn) ?>">
+        <?php if ($accountFilter > 0): ?>
+            <input type="hidden" name="account_id" value="<?= (int) $accountFilter ?>">
+        <?php endif; ?>
+        <button class="btn btn-soft" type="submit"><i class="bi bi-arrow-clockwise"></i> Recalculate</button>
+    </form>
     <button class="btn btn-primary-soft" type="button" data-bs-toggle="modal" data-bs-target="#addAllocationModal">
         <i class="bi bi-plus-circle"></i> Add Payable
     </button>
@@ -40,12 +71,11 @@ renderHeader('Payables');
 <div class="glass-card">
     <div class="table-responsive">
         <table class="table soft-table">
-            <thead><tr><th>Purpose</th><th>Account</th><th>Category</th><th>Allocated</th><th>Paid</th><th>Remaining</th><th>Status</th><th>Update</th></tr></thead>
+            <thead><tr><th>Purpose</th><th>Category</th><th>Allocated</th><th>Paid</th><th>Remaining</th><th>Status</th><th>Update</th></tr></thead>
             <tbody>
             <?php foreach ($rows as $row): ?>
                 <tr>
                     <td><?= e($row['purpose']) ?><div class="small text-muted"><?= e($row['notes']) ?></div></td>
-                    <td><?= e($row['account_name']) ?></td>
                     <td><?= e($row['category']) ?></td>
                     <td><?= money($row['allocated_amount']) ?></td>
                     <td><?= money($row['amount_paid']) ?></td>
@@ -68,7 +98,7 @@ renderHeader('Payables');
                     </td>
                 </tr>
             <?php endforeach; ?>
-            <?php if (!$rows): ?><tr><td colspan="8" class="text-center">No allocations found.</td></tr><?php endif; ?>
+            <?php if (!$rows): ?><tr><td colspan="7" class="text-center">No allocations found.</td></tr><?php endif; ?>
             </tbody>
         </table>
     </div>
@@ -174,6 +204,19 @@ renderHeader('Payables');
                                 <option value="<?= e($status) ?>" <?= $statusFilter === $status ? 'selected' : '' ?>><?= e($status) ?></option>
                             <?php endforeach; ?>
                         </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Category</label>
+                        <select name="category" class="form-select">
+                            <option value="">All Categories</option>
+                            <?php foreach ($filterCategories as $category): ?>
+                                <option value="<?= e($category) ?>" <?= $categoryFilter === $category ? 'selected' : '' ?>><?= e($category) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Purpose</label>
+                        <input name="purpose" class="form-control" value="<?= e($purposeFilter) ?>" placeholder="Search purpose">
                     </div>
                 </div>
                 <div class="modal-footer">
