@@ -4,10 +4,7 @@ declare(strict_types=1);
 ini_set('session.use_strict_mode', '1');
 ini_set('session.cookie_httponly', '1');
 ini_set('session.cookie_samesite', 'Strict');
-
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+ini_set('session.gc_maxlifetime', '7200');
 
 function appEnv(string $key, string $default = ''): string
 {
@@ -74,6 +71,84 @@ function db(): PDO
     ]);
     ensureDefaultSeedData($pdo);
     return $pdo;
+}
+
+// ---------------------------------------------------------------------------
+// Database-backed session handler (required for Vercel serverless / any
+// stateless hosting where the filesystem is ephemeral).
+// ---------------------------------------------------------------------------
+class DbSessionHandler implements SessionHandlerInterface
+{
+    public function open(string $path, string $name): bool
+    {
+        return true;
+    }
+
+    public function close(): bool
+    {
+        return true;
+    }
+
+    public function read(string $id): string|false
+    {
+        try {
+            $stmt = db()->prepare(
+                'SELECT session_data FROM php_sessions WHERE id = :id AND expires_at > NOW() LIMIT 1'
+            );
+            $stmt->execute(['id' => $id]);
+            $row = $stmt->fetch();
+            return $row ? (string) $row['session_data'] : '';
+        } catch (Throwable) {
+            return '';
+        }
+    }
+
+    public function write(string $id, string $data): bool
+    {
+        try {
+            $lifetime = max(1, (int) ini_get('session.gc_maxlifetime'));
+            db()->prepare(
+                'INSERT INTO php_sessions (id, session_data, expires_at)
+                 VALUES (:id, :data, DATE_ADD(NOW(), INTERVAL :lt SECOND))
+                 ON DUPLICATE KEY UPDATE
+                     session_data = VALUES(session_data),
+                     expires_at   = VALUES(expires_at)'
+            )->execute(['id' => $id, 'data' => $data, 'lt' => $lifetime]);
+            return true;
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    public function destroy(string $id): bool
+    {
+        try {
+            db()->prepare('DELETE FROM php_sessions WHERE id = :id')->execute(['id' => $id]);
+            return true;
+        } catch (Throwable) {
+            return false;
+        }
+    }
+
+    public function gc(int $max_lifetime): int|false
+    {
+        try {
+            $stmt = db()->prepare('DELETE FROM php_sessions WHERE expires_at < NOW()');
+            $stmt->execute();
+            return $stmt->rowCount();
+        } catch (Throwable) {
+            return false;
+        }
+    }
+}
+
+// Register DB session handler when a remote DB host is configured (Vercel / any non-local host).
+if (DB_HOST !== '127.0.0.1' && DB_HOST !== 'localhost') {
+    session_set_save_handler(new DbSessionHandler(), true);
+}
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
 }
 
 function ensureDefaultSeedData(PDO $pdo): void

@@ -10,6 +10,7 @@ DROP TABLE IF EXISTS allocations;
 DROP TABLE IF EXISTS deposits;
 DROP TABLE IF EXISTS accounts;
 DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS php_sessions;
 SET FOREIGN_KEY_CHECKS = 1;
 
 CREATE TABLE users (
@@ -133,6 +134,13 @@ CREATE TABLE reconciliations (
     deleted_at DATETIME NULL,
     CONSTRAINT fk_reconciliations_account FOREIGN KEY (account_id) REFERENCES accounts(id),
     CONSTRAINT fk_reconciliations_user FOREIGN KEY (created_by) REFERENCES users(id)
+) ENGINE=InnoDB;
+
+CREATE TABLE php_sessions (
+    id VARCHAR(128) NOT NULL PRIMARY KEY,
+    session_data MEDIUMTEXT NOT NULL,
+    expires_at DATETIME NOT NULL,
+    INDEX idx_php_sessions_expires (expires_at)
 ) ENGINE=InnoDB;
 
 INSERT INTO users (full_name, username, password, role, account_id) VALUES
