@@ -21,9 +21,14 @@ if (!$old || !in_array($status, STATUS_OPTIONS, true)) {
     redirect(pageUrl('allocations.php'));
 }
 
+if (!findAccount((int) $old['account_id'])) {
+    flash('error', 'You do not have access to update this allocation.');
+    redirect(pageUrl('allocations.php'));
+}
+
 try {
     $allocatedCents = amountToCents($old['allocated_amount']);
-    [$paidCents, $remainingCents] = normalizeAllocationAmounts($status, $allocatedCents, $paidCentsInput);
+    [$status, $paidCents, $remainingCents] = normalizeAllocationEditAmounts($status, $allocatedCents, $paidCentsInput);
     $newDeduction = allocationDeductionCents($status, $paidCents);
     $oldDeduction = allocationDeductionCents($old['status'], amountToCents($old['amount_paid']));
     $available = accountComputedBalanceCents((int) $old['account_id']) + $oldDeduction;
@@ -47,9 +52,24 @@ try {
         'id' => $id,
     ]);
 
+    $oldTxnStmt = $pdo->prepare(
+        'SELECT id, transaction_date, transaction_type, category, amount, description, status, running_balance
+         FROM transactions
+         WHERE related_allocation_id = :allocation_id AND deleted_at IS NULL
+         ORDER BY id ASC'
+    );
+    $oldTxnStmt->execute(['allocation_id' => $id]);
+    $oldTransactions = $oldTxnStmt->fetchAll();
+    $deleteOldTxns = $pdo->prepare(
+        'UPDATE transactions
+         SET deleted_at = NOW()
+         WHERE related_allocation_id = :allocation_id
+           AND deleted_at IS NULL'
+    );
+    $deleteOldTxns->execute(['allocation_id' => $id]);
+
     $txnType = $status === 'Withdrawn' ? 'Withdrawal' : 'Payment';
-    $deltaDeduction = $newDeduction - $oldDeduction;
-    if (in_array($status, ['Paid', 'Withdrawn', 'Partially Paid'], true) && $deltaDeduction > 0) {
+    if ($status !== 'Borrowed' && $newDeduction > 0) {
         $txn = $pdo->prepare(
             'INSERT INTO transactions (account_id, transaction_date, transaction_type, category, amount, description, status, related_allocation_id, created_by)
              VALUES (:account_id, :date, :type, :category, :amount, :description, :status, :allocation_id, :created_by)'
@@ -59,7 +79,7 @@ try {
             'date' => today(),
             'type' => $txnType,
             'category' => $old['category'],
-            'amount' => centsToDecimal($deltaDeduction),
+            'amount' => centsToDecimal($newDeduction),
             'description' => $old['purpose'],
             'status' => $status,
             'allocation_id' => $id,
@@ -67,7 +87,12 @@ try {
         ]);
     }
 
-    addAudit('UPDATE_ALLOCATION_STATUS', 'allocations', $id, $old, ['status' => $status, 'amount_paid' => centsToDecimal($paidCents)]);
+    addAudit('UPDATE_ALLOCATION_STATUS', 'allocations', $id, $old, [
+        'status' => $status,
+        'amount_paid' => centsToDecimal($paidCents),
+        'remaining_amount' => centsToDecimal($remainingCents),
+        'active_transactions_replaced' => $oldTransactions,
+    ]);
     recalculateAccount((int) $old['account_id']);
     $pdo->commit();
     flash('success', 'Allocation status updated.');

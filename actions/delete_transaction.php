@@ -17,6 +17,11 @@ if (!$old) {
     redirect(pageUrl('transactions.php'));
 }
 
+if (!transactionCanBeEdited($old)) {
+    flash('error', 'This transaction is linked to a deposit, payable, or transfer. Update the source record instead.');
+    redirect(pageUrl('transactions.php'));
+}
+
 $delete = db()->prepare('UPDATE transactions SET deleted_at = NOW() WHERE id = :id');
 $delete->execute(['id' => $id]);
 addAudit('SOFT_DELETE_TRANSACTION', 'transactions', $id, $old, null);

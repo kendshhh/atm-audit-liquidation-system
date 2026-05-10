@@ -53,11 +53,13 @@ renderHeader('Transactions');
                             <?php else: ?>
                                 <span class="small text-muted align-self-center">Locked</span>
                             <?php endif; ?>
-                            <form method="post" action="<?= actionUrl('delete_transaction.php') ?>" class="confirm-form">
-                                <input type="hidden" name="csrf_token" value="<?= e(csrfToken()) ?>">
-                                <input type="hidden" name="id" value="<?= (int) $row['id'] ?>">
-                                <button class="btn btn-sm btn-outline-danger">Delete</button>
-                            </form>
+                            <?php if (transactionCanBeEdited($row)): ?>
+                                <form method="post" action="<?= actionUrl('delete_transaction.php') ?>" class="confirm-form">
+                                    <input type="hidden" name="csrf_token" value="<?= e(csrfToken()) ?>">
+                                    <input type="hidden" name="id" value="<?= (int) $row['id'] ?>">
+                                    <button class="btn btn-sm btn-outline-danger">Delete</button>
+                                </form>
+                            <?php endif; ?>
                         </div>
                     </td>
                 </tr>

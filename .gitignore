@@ -2,6 +2,7 @@
 /exports/
 /uploads/
 *.log
+*.zip
 .env
 .DS_Store
 Thumbs.db

@@ -442,6 +442,23 @@ function normalizeAllocationAmounts(string $status, int $allocatedCents, int $pa
     return [0, $allocatedCents];
 }
 
+function normalizeAllocationEditAmounts(string $status, int $allocatedCents, int $paidCents): array
+{
+    if ($paidCents > 0) {
+        if ($status !== 'Withdrawn') {
+            $status = $paidCents < $allocatedCents ? 'Partially Paid' : 'Paid';
+        }
+
+        return [$status, $paidCents, $allocatedCents - $paidCents];
+    }
+
+    if (in_array($status, ['Paid', 'Withdrawn', 'Partially Paid'], true)) {
+        throw new RuntimeException('Enter the actual amount paid for this status.');
+    }
+
+    return [$status, 0, $allocatedCents];
+}
+
 function allocationDeductionCents(string $status, int $amountPaidCents): int
 {
     if (in_array($status, ['Paid', 'Withdrawn', 'Partially Paid'], true)) {

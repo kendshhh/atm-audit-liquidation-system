@@ -31,7 +31,7 @@ renderHeader('Deposits');
 <div class="glass-card">
     <div class="table-responsive">
         <table class="table soft-table">
-            <thead><tr><th>Date</th><th>Account</th><th>Total Deposit</th><th>Notes</th><th>Created By</th></tr></thead>
+            <thead><tr><th>Date</th><th>Account</th><th>Total Deposit</th><th>Notes</th><th>Created By</th><th></th></tr></thead>
             <tbody>
             <?php foreach ($deposits as $deposit): ?>
                 <tr>
@@ -40,9 +40,18 @@ renderHeader('Deposits');
                     <td><?= money($deposit['total_amount']) ?></td>
                     <td><?= e($deposit['notes']) ?></td>
                     <td><?= e($deposit['full_name'] ?? 'System') ?></td>
+                    <td>
+                        <form method="post" action="<?= actionUrl('delete_deposit.php') ?>" class="confirm-form">
+                            <input type="hidden" name="csrf_token" value="<?= e(csrfToken()) ?>">
+                            <input type="hidden" name="id" value="<?= (int) $deposit['id'] ?>">
+                            <button class="btn btn-sm btn-outline-danger" type="submit">
+                                <i class="bi bi-trash"></i> Delete
+                            </button>
+                        </form>
+                    </td>
                 </tr>
             <?php endforeach; ?>
-            <?php if (!$deposits): ?><tr><td colspan="5" class="text-center">No deposits found.</td></tr><?php endif; ?>
+            <?php if (!$deposits): ?><tr><td colspan="6" class="text-center">No deposits found.</td></tr><?php endif; ?>
             </tbody>
         </table>
     </div>

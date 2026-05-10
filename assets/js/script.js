@@ -254,14 +254,83 @@ if (window.openDepositModal && document.getElementById('addDepositModal')) {
 
 var statusModal = document.getElementById('statusModal');
 if (statusModal) {
+    var updateStatusPaymentPreview = function () {
+        var allocatedField = document.getElementById('statusAllocated');
+        var paidField = document.getElementById('statusPaid');
+        var preview = document.getElementById('statusPaymentPreview');
+        if (!allocatedField || !paidField || !preview) {
+            return;
+        }
+        var allocated = parseFloat(allocatedField.dataset.amount || '0');
+        var paid = parseFloat(paidField.value || '0');
+        var difference = allocated - paid;
+        if (paid <= 0) {
+            preview.value = 'No payment recorded';
+        } else if (difference > 0.009) {
+            preview.value = 'Remaining ' + peso(difference);
+        } else if (difference < -0.009) {
+            preview.value = 'Excess ' + peso(Math.abs(difference));
+        } else {
+            preview.value = 'Fully paid';
+        }
+    };
+
     statusModal.addEventListener('show.bs.modal', function (event) {
         var button = event.relatedTarget;
         document.getElementById('statusId').value = button.dataset.id || '';
         document.getElementById('statusPurpose').value = button.dataset.purpose || '';
+        var allocated = button.dataset.allocated || '0.00';
+        var allocatedField = document.getElementById('statusAllocated');
+        allocatedField.dataset.amount = allocated;
+        allocatedField.value = peso(allocated);
         document.getElementById('statusValue').value = button.dataset.status || 'Not Yet Paid';
         document.getElementById('statusPaid').value = button.dataset.paid || '0.00';
         document.getElementById('statusNotes').value = button.dataset.notes || '';
+        updateStatusPaymentPreview();
     });
+
+    var statusPaidField = document.getElementById('statusPaid');
+    if (statusPaidField) {
+        statusPaidField.addEventListener('input', updateStatusPaymentPreview);
+    }
+}
+
+var newAllocationAmount = document.getElementById('newAllocationAmount');
+var newAllocationStatus = document.getElementById('newAllocationStatus');
+var newAllocationPaid = document.getElementById('newAllocationPaid');
+var newAllocationPreview = document.getElementById('newAllocationPreview');
+
+function updateNewAllocationPreview() {
+    if (!newAllocationAmount || !newAllocationStatus || !newAllocationPaid || !newAllocationPreview) {
+        return;
+    }
+    var allocated = parseFloat(newAllocationAmount.value || '0');
+    var paid = parseFloat(newAllocationPaid.value || '0');
+    var status = newAllocationStatus.value || 'Not Yet Paid';
+    var difference = allocated - paid;
+
+    if (status === 'Borrowed') {
+        newAllocationPaid.value = '0.00';
+        newAllocationPreview.value = allocated > 0 ? 'Borrowed payable tracked separately; balance is unchanged' : 'Borrowed payable';
+        return;
+    }
+
+    if (paid <= 0) {
+        newAllocationPreview.value = allocated > 0 ? 'Remaining ' + peso(allocated) : 'No payment recorded';
+    } else if (difference > 0.009) {
+        newAllocationPreview.value = 'Remaining ' + peso(difference);
+    } else if (difference < -0.009) {
+        newAllocationPreview.value = 'Excess ' + peso(Math.abs(difference));
+    } else {
+        newAllocationPreview.value = 'Fully paid';
+    }
+}
+
+if (newAllocationAmount && newAllocationStatus && newAllocationPaid) {
+    newAllocationAmount.addEventListener('input', updateNewAllocationPreview);
+    newAllocationStatus.addEventListener('change', updateNewAllocationPreview);
+    newAllocationPaid.addEventListener('input', updateNewAllocationPreview);
+    updateNewAllocationPreview();
 }
 
 var transactionEditModal = document.getElementById('transactionEditModal');
