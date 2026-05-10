@@ -136,9 +136,9 @@ CREATE TABLE reconciliations (
 ) ENGINE=InnoDB;
 
 INSERT INTO users (full_name, username, password, role, account_id) VALUES
-('System Administrator', 'ADMIN', '$2y$10$d0W01NV31WiFZtai/Lqg2u3iQLDY5g.tKbIB.FbNLBVyUrOwOrWcK', 'Admin', NULL),
-('Kendra Abellana', 'Kendra', '$2y$10$7D.iUuptJTmj6ZOkc638NuxvgANsKWCDY7JDWHeV6f5w.rfV2a.WO', 'User', 1),
-('Roberto Abellana', 'Roberto', '$2y$10$yoe1.d6Z3ftsOlKiVLRzneTse01P/eMQNGuUfKZf9L47XGV0eKGWS', 'User', 2);
+('System Administrator', 'ADMIN', '$2y$10$mSe7lGQwkO.ksDSev71atup4fitix7VDUjQNQuDbRhrTcZ2ArTgqm', 'Admin', NULL),
+('Kendra Abellana', 'Kendra', '$2y$10$glR3e7LigDMtI82as4VuN.DLaHUzh6Wy8zhLZ7fB6b/YofvvbTKOC', 'User', 1),
+('Roberto Abellana', 'Roberto', '$2y$10$q6PhtTJNRDbNkJWYblFkhewVjbKbYlQnQSL2DjoE2s4EWrl2Qfp2.', 'User', 2);
 
 INSERT INTO accounts (account_name, current_balance) VALUES
 ('Kendra Abellana ATM Account', 0.00),

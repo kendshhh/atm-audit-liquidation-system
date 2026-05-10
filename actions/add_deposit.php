@@ -8,6 +8,9 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !validateCsrf($_POST['csrf_token'] 
 }
 
 $accountId = (int) ($_POST['account_id'] ?? 0);
+if ($accountId <= 0 && !isAdmin()) {
+    $accountId = currentUserAccountId() ?? 0;
+}
 $date = $_POST['deposit_date'] ?? today();
 $totalCents = amountToCents($_POST['total_amount'] ?? 0);
 $notes = trim($_POST['notes'] ?? '');
@@ -38,15 +41,37 @@ foreach ($purposes as $i => $purposeValue) {
         flash('error', 'Complete every allocation row with valid values.');
         redirect(pageUrl('dashboard.php?open_deposit=1'));
     }
+    if ($status === 'Partially Paid') {
+        flash('error', 'Partially Paid is not supported when adding deposit allocations. Use another status and update it later from Payables.');
+        redirect(pageUrl('dashboard.php?open_deposit=1'));
+    }
 
     [$paidCents, $remainingCents] = normalizeAllocationAmounts($status, $amountCents, 0);
     $allocations[] = compact('purpose', 'category', 'amountCents', 'paidCents', 'remainingCents', 'status', 'note');
     $allocatedCents += $amountCents;
 }
 
-if (!$allocations || $allocatedCents !== $totalCents) {
-    flash('error', 'Allocation total must match the deposited amount before saving.');
+if ($allocatedCents <= 0) {
+    flash('error', 'Add at least one valid allocation row before saving.');
     redirect(pageUrl('dashboard.php?open_deposit=1'));
+}
+
+if ($allocatedCents > $totalCents) {
+    flash('error', 'Allocated amount cannot be greater than the deposited amount.');
+    redirect(pageUrl('dashboard.php?open_deposit=1'));
+}
+
+$remainingCents = $totalCents - $allocatedCents;
+if ($remainingCents > 0) {
+    $allocations[] = [
+        'purpose' => 'Unallocated Deposit Remainder',
+        'category' => 'Savings',
+        'amountCents' => $remainingCents,
+        'paidCents' => 0,
+        'remainingCents' => $remainingCents,
+        'status' => 'Saved',
+        'note' => 'Auto-generated from deposit amount that was not manually allocated.',
+    ];
 }
 
 $pdo = db();
@@ -97,10 +122,18 @@ try {
         ]);
     }
 
-    addAudit('CREATE_DEPOSIT', 'deposits', $depositId, null, ['amount' => centsToDecimal($totalCents), 'allocations' => count($allocations)]);
+    addAudit('CREATE_DEPOSIT', 'deposits', $depositId, null, [
+        'amount' => centsToDecimal($totalCents),
+        'allocations' => count($allocations),
+        'auto_saved_remainder' => $remainingCents > 0 ? centsToDecimal($remainingCents) : centsToDecimal(0),
+    ]);
     recalculateAccount($accountId);
     $pdo->commit();
-    flash('success', 'Deposit and allocations saved successfully.');
+    $message = 'Deposit and allocations saved successfully.';
+    if ($remainingCents > 0) {
+        $message .= ' Remaining amount ' . money(centsToDecimal($remainingCents)) . ' was automatically added to Savings.';
+    }
+    flash('success', $message);
 } catch (Throwable $e) {
     if ($pdo->inTransaction()) {
         $pdo->rollBack();

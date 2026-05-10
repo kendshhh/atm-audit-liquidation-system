@@ -38,7 +38,13 @@ function renderHeader(string $title): void
                                 <span><?= e(str_replace(' ATM Account', '', $account['account_name'])) ?>: <strong><?= money($account['current_balance']) ?></strong></span>
                             <?php endforeach; ?>
                         </div>
-                        <button class="btn btn-soft" id="bigTextToggle" type="button"><i class="bi bi-type"></i> Bigger Text</button>
+                        <button class="btn btn-soft icon-button" id="themeToggleButton" type="button" aria-label="Toggle night mode" title="Toggle night mode">
+                            <i class="bi bi-moon-stars-fill"></i>
+                        </button>
+                        <?php if (isAdmin()): ?>
+                            <span class="badge rounded-pill text-bg-dark admin-badge"><i class="bi bi-shield-lock-fill me-1"></i>Admin</span>
+                        <?php endif; ?>
+                        <button class="btn btn-soft print-page-button" id="printPageButton" type="button"><i class="bi bi-printer"></i> Print</button>
                         <div class="profile-pill"><i class="bi bi-person-circle"></i> <?= e($user['full_name']) ?></div>
                     </div>
                 </header>

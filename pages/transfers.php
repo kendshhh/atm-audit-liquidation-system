@@ -25,34 +25,13 @@ $receiverAccounts = isAdmin() ? fetchAccounts(false) : array_filter(fetchAccount
 
 renderHeader('Transfers');
 ?>
+<div class="page-actions">
+    <button class="btn btn-primary-soft" type="button" data-bs-toggle="modal" data-bs-target="#transferModal">
+        <i class="bi bi-arrow-left-right"></i> Make Transfer
+    </button>
+</div>
 <div class="row g-4">
-    <div class="col-12 col-xl-4">
-        <div class="glass-card">
-            <h3>Make Transfer</h3>
-            <form method="post" action="<?= actionUrl('add_transfer.php') ?>">
-                <input type="hidden" name="csrf_token" value="<?= e(csrfToken()) ?>">
-                <div class="mb-3"><label class="form-label">Date</label><input type="date" name="transfer_date" class="form-control" value="<?= e(today()) ?>" required></div>
-                <div class="mb-3">
-                    <label class="form-label">From Account</label>
-                    <select name="from_account_id" class="form-select" required>
-                        <option value="">Choose sender</option>
-                        <?php foreach ($senderAccounts as $account): ?><option value="<?= (int) $account['id'] ?>"><?= e($account['account_name']) ?> - <?= money($account['current_balance']) ?></option><?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">To Account</label>
-                    <select name="to_account_id" class="form-select" required>
-                        <option value="">Choose receiver</option>
-                        <?php foreach ($receiverAccounts as $account): ?><option value="<?= (int) $account['id'] ?>"><?= e($account['account_name']) ?></option><?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="mb-3"><label class="form-label">Amount</label><input type="number" name="amount" class="form-control" min="0.01" step="0.01" required></div>
-                <div class="mb-3"><label class="form-label">Notes</label><textarea name="notes" class="form-control" rows="2"></textarea></div>
-                <button class="btn btn-primary-soft w-100">Save Transfer</button>
-            </form>
-        </div>
-    </div>
-    <div class="col-12 col-xl-8">
+    <div class="col-12">
         <div class="glass-card">
             <h3>Transfer History</h3>
             <div class="table-responsive">
@@ -66,6 +45,45 @@ renderHeader('Transfers');
                     </tbody>
                 </table>
             </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="transferModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable modal-lg">
+        <div class="modal-content glass-modal">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-arrow-left-right me-2"></i>Make Transfer</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="post" action="<?= actionUrl('add_transfer.php') ?>">
+                <div class="modal-body">
+                    <input type="hidden" name="csrf_token" value="<?= e(csrfToken()) ?>">
+                    <div class="row g-3">
+                        <div class="col-md-4"><label class="form-label">Date</label><input type="date" name="transfer_date" class="form-control" value="<?= e(today()) ?>" required></div>
+                        <div class="col-md-4">
+                            <label class="form-label">From Account</label>
+                            <select name="from_account_id" class="form-select" required>
+                                <option value="">Choose sender</option>
+                                <?php foreach ($senderAccounts as $account): ?><option value="<?= (int) $account['id'] ?>"><?= e($account['account_name']) ?> - <?= money($account['current_balance']) ?></option><?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">To Account</label>
+                            <select name="to_account_id" class="form-select" required>
+                                <option value="">Choose receiver</option>
+                                <?php foreach ($receiverAccounts as $account): ?><option value="<?= (int) $account['id'] ?>"><?= e($account['account_name']) ?></option><?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-md-4"><label class="form-label">Amount</label><input type="number" name="amount" class="form-control" min="0.01" step="0.01" required></div>
+                        <div class="col-12"><label class="form-label">Notes</label><textarea name="notes" class="form-control" rows="3"></textarea></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-soft" data-bs-dismiss="modal">Cancel</button>
+                    <button class="btn btn-primary-soft" type="submit">Save Transfer</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>

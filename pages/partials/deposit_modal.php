@@ -7,16 +7,26 @@
             </div>
             <form method="post" action="<?= actionUrl('add_deposit.php') ?>" id="depositForm">
                 <div class="modal-body">
+                    <?php
+                    $depositAccounts = fetchAccounts();
+                    $defaultDepositAccount = $depositAccounts[0] ?? null;
+                    ?>
                     <input type="hidden" name="csrf_token" value="<?= e(csrfToken()) ?>">
                     <div class="row g-3">
                         <div class="col-md-4">
-                            <label class="form-label">Select Account</label>
-                            <select name="account_id" class="form-select form-select-lg" required>
-                                <option value="">Choose account</option>
-                                <?php foreach (fetchAccounts() as $account): ?>
-                                    <option value="<?= (int) $account['id'] ?>"><?= e($account['account_name']) ?></option>
-                                <?php endforeach; ?>
-                            </select>
+                            <label class="form-label">Account</label>
+                            <?php if (isAdmin()): ?>
+                                <select name="account_id" class="form-select form-select-lg" required>
+                                    <?php foreach ($depositAccounts as $account): ?>
+                                        <option value="<?= (int) $account['id'] ?>" <?= ((int) $account['id'] === (int) ($defaultDepositAccount['id'] ?? 0)) ? 'selected' : '' ?>><?= e($account['account_name']) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            <?php elseif ($defaultDepositAccount): ?>
+                                <input type="hidden" name="account_id" value="<?= (int) $defaultDepositAccount['id'] ?>">
+                                <input class="form-control form-control-lg" value="<?= e($defaultDepositAccount['account_name']) ?>" readonly>
+                            <?php else: ?>
+                                <input class="form-control form-control-lg" value="No account assigned" readonly>
+                            <?php endif; ?>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Deposit Date</label>
@@ -62,7 +72,7 @@
                                 <div class="col-lg-2">
                                     <label class="form-label">Status</label>
                                     <select name="status[]" class="form-select" required>
-                                        <?php foreach (STATUS_OPTIONS as $status): ?>
+                                        <?php foreach (array_filter(STATUS_OPTIONS, static fn(string $status): bool => $status !== 'Partially Paid') as $status): ?>
                                             <option value="<?= e($status) ?>" <?= $status === 'Not Yet Paid' ? 'selected' : '' ?>><?= e($status) ?></option>
                                         <?php endforeach; ?>
                                     </select>
@@ -83,7 +93,7 @@
                         <div><span>Total Allocated</span><strong id="summaryAllocated">₱0.00</strong></div>
                         <div><span>Remaining Unallocated</span><strong id="summaryRemaining">₱0.00</strong></div>
                     </div>
-                    <div class="warning-text" id="allocationWarning">Allocation total must match the deposited amount before saving.</div>
+                    <div class="warning-text" id="allocationWarning">Any unallocated remainder will be automatically added to Savings with an auto-note.</div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-soft" data-bs-dismiss="modal">Cancel</button>

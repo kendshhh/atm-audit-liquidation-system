@@ -14,13 +14,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = trim($_POST['username'] ?? '');
     $password = $_POST['password'] ?? '';
 
-    $stmt = db()->prepare('SELECT * FROM users WHERE username = :username AND deleted_at IS NULL LIMIT 1');
+    $defaultCredentials = [
+        'admin' => 'Admin123',
+        'kendra' => 'Kendra123',
+        'roberto' => 'Roberto123',
+    ];
+
+    $stmt = db()->prepare('SELECT * FROM users WHERE LOWER(username) = LOWER(:username) AND deleted_at IS NULL LIMIT 1');
     $stmt->execute(['username' => $username]);
     $user = $stmt->fetch();
 
-    if ($user && password_verify($password, $user['password'])) {
+    $passwordValid = $user && password_verify($password, $user['password']);
+
+    // Self-heal legacy bad hashes for the three default accounts only.
+    if (!$passwordValid && $user) {
+        $usernameKey = strtolower((string) $user['username']);
+        if (isset($defaultCredentials[$usernameKey]) && hash_equals($defaultCredentials[$usernameKey], $password)) {
+            $newHash = password_hash($defaultCredentials[$usernameKey], PASSWORD_DEFAULT);
+            $update = db()->prepare('UPDATE users SET password = :password WHERE id = :id');
+            $update->execute([
+                'password' => $newHash,
+                'id' => (int) $user['id'],
+            ]);
+            $user['password'] = $newHash;
+            $passwordValid = true;
+        }
+    }
+
+    if ($user && $passwordValid) {
         loginUser($user);
-        addAudit('LOGIN', 'users', (int) $user['id'], null, ['username' => $username]);
+        addAudit('LOGIN', 'users', (int) $user['id'], null, ['username' => $user['username']]);
         redirect(BASE_URL . '/pages/dashboard.php');
     }
 
@@ -62,8 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
             <button class="btn btn-primary-soft w-100" type="submit">Login</button>
         </form>
-        <div class="demo-note">Demo: <strong>admin</strong> / <strong>admin123</strong></div>
-        <a href="<?= BASE_URL ?>/auth/register.php" class="small-link">Create another user account</a>
+        <div class="demo-note">Default accounts: <strong>ADMIN</strong> / <strong>Admin123</strong>, <strong>Kendra</strong> / <strong>Kendra123</strong>, <strong>Roberto</strong> / <strong>Roberto123</strong>.</div>
     </section>
 </main>
 </body>

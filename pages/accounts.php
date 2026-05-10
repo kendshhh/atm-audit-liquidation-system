@@ -24,9 +24,14 @@ renderHeader('Accounts');
                     <div><span>Not Yet Paid</span><strong><?= money($s['not_yet_paid']) ?></strong></div>
                     <div><span>Saved</span><strong><?= money($s['saved']) ?></strong></div>
                 </div>
+                <?php $summary = reconciliationSummary((int) $account['id']); ?>
+                <div class="mt-3 small text-muted">
+                    Latest reconciliation: <?= $summary['has_record'] ? e($summary['reconciliation_date']) . ' / ' . e($summary['label']) . ' / ' . money($summary['difference']) : 'No reconciliation yet' ?>
+                </div>
                 <div class="d-flex gap-2 flex-wrap mt-3">
                     <a href="<?= pageUrl('deposits.php?account_id=' . (int) $account['id']) ?>" class="btn btn-soft">View Deposits</a>
                     <a href="<?= pageUrl('allocations.php?account_id=' . (int) $account['id']) ?>" class="btn btn-soft">View Payables</a>
+                    <a href="<?= pageUrl('reconciliation.php?account_id=' . (int) $account['id']) ?>" class="btn btn-soft">Reconcile</a>
                 </div>
             </div>
         </div>

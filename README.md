@@ -20,7 +20,6 @@ atm-audit-liquidation-system/
 ├── assets/js/script.js
 ├── assets/images/
 ├── auth/login.php
-├── auth/register.php
 ├── auth/logout.php
 ├── pages/dashboard.php
 ├── pages/accounts.php
@@ -55,6 +54,8 @@ atm-audit-liquidation-system/
 4. Import `database.sql`.
 5. Open `http://localhost/atm-audit-liquidation-system`.
 
+If the default users or ATM accounts are missing in an existing database, import `seed.sql` in the same database to restore them.
+
 ## Public Deployment
 
 GitHub stores the source code only. This app needs PHP and MySQL to run publicly.
@@ -78,7 +79,7 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for public hosting steps.
 - Regular users can only view and use their assigned ATM account.
 - Kendra is assigned to Kendra Abellana ATM Account.
 - Roberto is assigned to Roberto Abellana ATM Account.
-- New registered users choose one assigned ATM account during registration.
+- Public account registration is disabled; only default seeded users can sign in.
 
 ## Main Flow
 
@@ -112,5 +113,6 @@ Reports support:
 - Kendra account report
 - Roberto account report
 - Print
-- Export PDF through browser print
-- Export Excel-compatible CSV
+- Export PDF
+- Export Excel (XLSX)
+- Export CSV

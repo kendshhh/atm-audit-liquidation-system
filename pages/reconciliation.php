@@ -3,6 +3,18 @@ require_once __DIR__ . '/../includes/header.php';
 require_once __DIR__ . '/../includes/footer.php';
 requireLogin();
 
+$selectedAccountId = (int) ($_GET['account_id'] ?? currentUserAccountId() ?? 0);
+if ($selectedAccountId > 0 && !findAccount($selectedAccountId)) {
+    $selectedAccountId = currentUserAccountId() ?? 0;
+}
+if (!isAdmin() && $selectedAccountId === 0) {
+    $selectedAccountId = currentUserAccountId() ?? 0;
+}
+if (isAdmin() && $selectedAccountId === 0) {
+    $adminAccounts = fetchAccounts(false);
+    $selectedAccountId = (int) ($adminAccounts[0]['id'] ?? 0);
+}
+
 $stmt = db()->prepare(
     'SELECT r.*, a.account_name
      FROM reconciliations r
@@ -13,6 +25,7 @@ $stmt = db()->prepare(
 );
 $stmt->execute(bindAccountAccess());
 $rows = $stmt->fetchAll();
+$selectedSummary = $selectedAccountId > 0 ? reconciliationSummary($selectedAccountId) : null;
 
 renderHeader('Reconciliation');
 ?>
@@ -27,7 +40,7 @@ renderHeader('Reconciliation');
                     <label class="form-label">Account</label>
                     <select name="account_id" id="reconcileAccount" class="form-select" required>
                         <?php foreach (fetchAccounts() as $a): ?>
-                            <option value="<?= (int) $a['id'] ?>" data-balance="<?= e((string) $a['current_balance']) ?>"><?= e($a['account_name']) ?> - System <?= money($a['current_balance']) ?></option>
+                            <option value="<?= (int) $a['id'] ?>" data-balance="<?= e((string) $a['current_balance']) ?>" <?= $selectedAccountId === (int) $a['id'] ? 'selected' : '' ?>><?= e($a['account_name']) ?> - System <?= money($a['current_balance']) ?></option>
                         <?php endforeach; ?>
                     </select>
                 </div>
@@ -48,6 +61,13 @@ renderHeader('Reconciliation');
                 <button class="btn btn-primary-soft w-100">Save Reconciliation</button>
             </form>
         </div>
+        <div class="glass-card mt-4">
+            <div class="eyebrow">Latest Status</div>
+            <h3 class="mb-2"><?= $selectedSummary ? e($selectedSummary['label']) : 'No Reconciliation Yet' ?></h3>
+            <div class="small text-muted">
+                <?= $selectedSummary ? 'Date: ' . e($selectedSummary['reconciliation_date']) . ' | Difference: ' . money($selectedSummary['difference']) : 'Select an account and save a reconciliation to track the difference.' ?>
+            </div>
+        </div>
     </div>
     <div class="col-12 col-xl-8">
         <div class="glass-card">
@@ -57,7 +77,7 @@ renderHeader('Reconciliation');
                     <thead><tr><th>Date</th><th>Account</th><th>System</th><th>Actual</th><th>Difference</th><th>Result</th></tr></thead>
                     <tbody>
                     <?php foreach ($rows as $r): $diff = (float) $r['difference']; ?>
-                        <tr><td><?= e($r['reconciliation_date']) ?></td><td><?= e($r['account_name']) ?></td><td><?= money($r['system_balance']) ?></td><td><?= money($r['actual_atm_balance']) ?></td><td><?= money($diff) ?></td><td><?= $diff < 0 ? 'Missing Funds' : ($diff > 0 ? 'Excess Funds' : 'Balanced') ?></td></tr>
+                        <tr><td><?= e($r['reconciliation_date']) ?></td><td><?= e($r['account_name']) ?></td><td><?= money($r['system_balance']) ?></td><td><?= money($r['actual_atm_balance']) ?></td><td><?= money($diff) ?></td><td><?= e(reconciliationStatusLabel($diff)) ?></td></tr>
                     <?php endforeach; ?>
                     <?php if (!$rows): ?><tr><td colspan="6"><div class="empty-state">No reconciliation records yet.</div></td></tr><?php endif; ?>
                     </tbody>

@@ -18,9 +18,13 @@ renderHeader('Settings');
 <div class="row g-4">
     <div class="col-12 col-lg-6">
         <div class="glass-card">
-            <h3>Senior-Friendly Display</h3>
-            <p class="text-muted">Use the Bigger Text button in the top bar to increase text size across the system.</p>
-            <button class="btn btn-primary-soft" id="settingsBigText" type="button">Toggle Bigger Text</button>
+            <h3>Font Size</h3>
+            <p class="text-muted">Adjust the app font size with the slider. The setting is saved on this device.</p>
+            <div class="font-slider-row">
+                <label for="fontSizeSlider" class="form-label mb-0">Text size</label>
+                <span class="badge text-bg-light" id="fontSizeValue">16px</span>
+            </div>
+            <input type="range" id="fontSizeSlider" class="form-range mt-3" min="14" max="22" step="1" value="16">
         </div>
     </div>
     <div class="col-12 col-lg-6">

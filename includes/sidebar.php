@@ -13,6 +13,9 @@ $items = [
 ];
 ?>
 <aside class="sidebar glass-card" id="sidebar">
+    <button class="sidebar-edge-toggle d-none d-lg-inline-flex" id="sidebarCollapseToggle" type="button" aria-label="Collapse navigation" title="Collapse navigation">
+        <i class="bi bi-chevron-left"></i>
+    </button>
     <div class="brand-block">
         <div class="brand-icon"><i class="bi bi-bank2"></i></div>
         <div>

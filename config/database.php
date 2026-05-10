@@ -48,6 +48,17 @@ const DEFAULT_CATEGORIES = [
     'Others',
 ];
 
+const DEFAULT_SEED_ACCOUNTS = [
+    [1, 'Kendra Abellana ATM Account', 6000.00],
+    [2, 'Roberto Abellana ATM Account', 6500.00],
+];
+
+const DEFAULT_SEED_USERS = [
+    ['System Administrator', 'ADMIN', '$2y$10$mSe7lGQwkO.ksDSev71atup4fitix7VDUjQNQuDbRhrTcZ2ArTgqm', 'Admin', null],
+    ['Kendra Abellana', 'Kendra', '$2y$10$glR3e7LigDMtI82as4VuN.DLaHUzh6Wy8zhLZ7fB6b/YofvvbTKOC', 'User', 1],
+    ['Roberto Abellana', 'Roberto', '$2y$10$q6PhtTJNRDbNkJWYblFkhewVjbKbYlQnQSL2DjoE2s4EWrl2Qfp2.', 'User', 2],
+];
+
 function db(): PDO
 {
     static $pdo = null;
@@ -61,7 +72,80 @@ function db(): PDO
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES => false,
     ]);
+    ensureDefaultSeedData($pdo);
     return $pdo;
+}
+
+function ensureDefaultSeedData(PDO $pdo): void
+{
+    try {
+        $pdo->beginTransaction();
+
+        $accountStmt = $pdo->prepare(
+            'INSERT INTO accounts (id, account_name, current_balance, deleted_at)
+             VALUES (:id, :account_name, :current_balance, NULL)
+             ON DUPLICATE KEY UPDATE
+                 account_name = VALUES(account_name),
+                 deleted_at = NULL'
+        );
+        foreach (DEFAULT_SEED_ACCOUNTS as [$id, $accountName, $balance]) {
+            $accountStmt->execute([
+                'id' => $id,
+                'account_name' => $accountName,
+                'current_balance' => $balance,
+            ]);
+        }
+
+        $findDefaultUserStmt = $pdo->prepare(
+            'SELECT id FROM users WHERE LOWER(username) = LOWER(:username) LIMIT 1'
+        );
+        $updateDefaultUserStmt = $pdo->prepare(
+            'UPDATE users
+             SET full_name = :full_name,
+                 password = :password,
+                 role = :role,
+                 account_id = :account_id,
+                 deleted_at = NULL
+             WHERE id = :id'
+        );
+        $insertDefaultUserStmt = $pdo->prepare(
+            'INSERT INTO users (full_name, username, password, role, account_id, deleted_at)
+             VALUES (:full_name, :username, :password, :role, :account_id, NULL)'
+        );
+
+        foreach (DEFAULT_SEED_USERS as [$fullName, $username, $password, $role, $accountId]) {
+            $params = [
+                'full_name' => $fullName,
+                'username' => $username,
+                'password' => $password,
+                'role' => $role,
+                'account_id' => $accountId,
+            ];
+
+            $findDefaultUserStmt->execute(['username' => $username]);
+            $existingId = (int) ($findDefaultUserStmt->fetch()['id'] ?? 0);
+            if ($existingId > 0) {
+                $updateDefaultUserStmt->execute([
+                    'full_name' => $fullName,
+                    'password' => $password,
+                    'role' => $role,
+                    'account_id' => $accountId,
+                    'id' => $existingId,
+                ]);
+            } else {
+                $insertDefaultUserStmt->execute($params);
+            }
+        }
+
+        if ($pdo->inTransaction()) {
+            $pdo->commit();
+        }
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        error_log($e->getMessage());
+    }
 }
 
 function e(?string $value): string
@@ -362,6 +446,57 @@ function recalculateRunningBalances(int $accountId): void
 function accountHasBalance(int $accountId, int $requiredCents): bool
 {
     return accountComputedBalanceCents($accountId) >= $requiredCents;
+}
+
+function transactionCanBeEdited(array $transaction): bool
+{
+    return empty($transaction['related_deposit_id'])
+        && empty($transaction['related_transfer_id'])
+        && empty($transaction['related_allocation_id']);
+}
+
+function reconciliationStatusLabel(float $difference): string
+{
+    if ($difference < 0) {
+        return 'Missing Funds';
+    }
+
+    if ($difference > 0) {
+        return 'Excess Funds';
+    }
+
+    return 'Balanced';
+}
+
+function latestReconciliation(int $accountId): ?array
+{
+    $stmt = db()->prepare(
+        'SELECT reconciliation_date, system_balance, actual_atm_balance, difference, notes
+         FROM reconciliations
+         WHERE account_id = :account_id AND deleted_at IS NULL
+         ORDER BY reconciliation_date DESC, id DESC
+         LIMIT 1'
+    );
+    $stmt->execute(['account_id' => $accountId]);
+    $row = $stmt->fetch();
+
+    return $row ?: null;
+}
+
+function reconciliationSummary(int $accountId): array
+{
+    $latest = latestReconciliation($accountId);
+    $difference = (float) ($latest['difference'] ?? 0);
+
+    return [
+        'has_record' => (bool) $latest,
+        'reconciliation_date' => $latest['reconciliation_date'] ?? null,
+        'system_balance' => (float) ($latest['system_balance'] ?? 0),
+        'actual_atm_balance' => (float) ($latest['actual_atm_balance'] ?? 0),
+        'difference' => $difference,
+        'label' => reconciliationStatusLabel($difference),
+        'notes' => $latest['notes'] ?? null,
+    ];
 }
 
 function addAudit(string $action, string $table, ?int $recordId, $oldValue = null, $newValue = null): void
