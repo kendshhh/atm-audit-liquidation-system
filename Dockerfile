@@ -1,14 +1,12 @@
-FROM php:8.2-apache
+FROM php:8.2-cli
 
 RUN docker-php-ext-install pdo pdo_mysql
-RUN a2dismod mpm_event || true \
-    && a2dismod mpm_worker || true \
-    && a2enmod mpm_prefork rewrite
 
 WORKDIR /var/www/html
 COPY . /var/www/html
 
-RUN mkdir -p /var/www/html/exports \
-    && chown -R www-data:www-data /var/www/html
+RUN mkdir -p /var/www/html/exports
 
-EXPOSE 80
+EXPOSE 8080
+
+CMD ["sh", "-c", "php -S 0.0.0.0:${PORT:-8080} -t /var/www/html"]
