@@ -91,8 +91,135 @@ function db(): PDO
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES => false,
     ]);
+    ensureAppTables($pdo);
     ensureDefaultSeedData($pdo);
     return $pdo;
+}
+
+function ensureAppTables(PDO $pdo): void
+{
+    // Bootstrap schema for fresh cloud databases without running destructive SQL.
+    $statements = [
+        "CREATE TABLE IF NOT EXISTS users (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            full_name VARCHAR(120) NOT NULL,
+            username VARCHAR(60) NOT NULL UNIQUE,
+            password VARCHAR(255) NOT NULL,
+            role ENUM('Admin', 'User') NOT NULL DEFAULT 'User',
+            account_id INT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            deleted_at DATETIME NULL,
+            INDEX idx_users_account (account_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+
+        "CREATE TABLE IF NOT EXISTS accounts (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            account_name VARCHAR(160) NOT NULL UNIQUE,
+            current_balance DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            deleted_at DATETIME NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+
+        "CREATE TABLE IF NOT EXISTS deposits (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            account_id INT NOT NULL,
+            deposit_date DATE NOT NULL,
+            total_amount DECIMAL(15,2) NOT NULL,
+            notes TEXT NULL,
+            created_by INT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            deleted_at DATETIME NULL,
+            INDEX idx_deposits_account_date (account_id, deposit_date)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+
+        "CREATE TABLE IF NOT EXISTS allocations (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            deposit_id INT NULL,
+            account_id INT NOT NULL,
+            purpose VARCHAR(180) NOT NULL,
+            category VARCHAR(100) NOT NULL,
+            allocated_amount DECIMAL(15,2) NOT NULL,
+            amount_paid DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+            remaining_amount DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+            status ENUM('Paid', 'Pending', 'Not Yet Paid', 'Partially Paid', 'Saved', 'Transferred', 'Borrowed', 'Withdrawn') NOT NULL DEFAULT 'Not Yet Paid',
+            notes TEXT NULL,
+            related_transfer_id INT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NULL,
+            deleted_at DATETIME NULL,
+            INDEX idx_allocations_account_status (account_id, status),
+            INDEX idx_allocations_category (category)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+
+        "CREATE TABLE IF NOT EXISTS transfers (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            from_account_id INT NOT NULL,
+            to_account_id INT NULL,
+            transfer_date DATE NOT NULL,
+            amount DECIMAL(15,2) NOT NULL,
+            notes TEXT NULL,
+            created_by INT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            deleted_at DATETIME NULL,
+            INDEX idx_transfers_date (transfer_date)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+
+        "CREATE TABLE IF NOT EXISTS transactions (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            account_id INT NOT NULL,
+            transaction_date DATE NOT NULL,
+            transaction_type ENUM('Deposit', 'Payment', 'Withdrawal', 'Transfer In', 'Transfer Out', 'Borrowed', 'Adjustment') NOT NULL,
+            category VARCHAR(100) NOT NULL,
+            amount DECIMAL(15,2) NOT NULL,
+            description TEXT NULL,
+            status VARCHAR(50) NOT NULL,
+            running_balance DECIMAL(15,2) NOT NULL DEFAULT 0.00,
+            related_allocation_id INT NULL,
+            related_deposit_id INT NULL,
+            related_transfer_id INT NULL,
+            created_by INT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            deleted_at DATETIME NULL,
+            INDEX idx_transactions_account_date (account_id, transaction_date),
+            INDEX idx_transactions_type (transaction_type)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+
+        "CREATE TABLE IF NOT EXISTS audit_logs (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NULL,
+            action VARCHAR(80) NOT NULL,
+            table_name VARCHAR(80) NOT NULL,
+            record_id INT NULL,
+            old_value LONGTEXT NULL,
+            new_value LONGTEXT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_audit_created (created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+
+        "CREATE TABLE IF NOT EXISTS reconciliations (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            account_id INT NOT NULL,
+            reconciliation_date DATE NOT NULL,
+            system_balance DECIMAL(15,2) NOT NULL,
+            actual_atm_balance DECIMAL(15,2) NOT NULL,
+            difference DECIMAL(15,2) NOT NULL,
+            notes TEXT NULL,
+            created_by INT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            deleted_at DATETIME NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+
+        "CREATE TABLE IF NOT EXISTS php_sessions (
+            id VARCHAR(128) NOT NULL PRIMARY KEY,
+            session_data MEDIUMTEXT NOT NULL,
+            expires_at DATETIME NOT NULL,
+            INDEX idx_php_sessions_expires (expires_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+    ];
+
+    foreach ($statements as $sql) {
+        $pdo->exec($sql);
+    }
 }
 
 // ---------------------------------------------------------------------------
