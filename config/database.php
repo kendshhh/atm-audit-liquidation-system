@@ -12,8 +12,30 @@ function appEnv(string $key, string $default = ''): string
     return ($value === false || $value === '') ? $default : (string) $value;
 }
 
+function resolveBaseUrl(): string
+{
+    $configured = trim(appEnv('APP_BASE_URL', ''));
+    if ($configured !== '') {
+        return '/' . trim($configured, '/');
+    }
+
+    $scriptName = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? ''));
+    $dir = rtrim(str_replace('\\', '/', dirname($scriptName)), '/');
+
+    // Scripts are typically inside /auth, /pages, or /actions; move one level up.
+    if (preg_match('#/(auth|pages|actions)$#', $dir) === 1) {
+        $dir = rtrim(str_replace('\\', '/', dirname($dir)), '/');
+    }
+
+    if ($dir === '' || $dir === '/' || $dir === '.') {
+        return '';
+    }
+
+    return $dir;
+}
+
 define('APP_NAME', 'ATM Audit and Liquidation Management System');
-define('BASE_URL', rtrim(appEnv('APP_BASE_URL', '/atm-audit-liquidation-system'), '/'));
+define('BASE_URL', resolveBaseUrl());
 define('DB_HOST', appEnv('DB_HOST', '127.0.0.1'));
 define('DB_NAME', appEnv('DB_NAME', 'atm_audit_liquidation'));
 define('DB_USER', appEnv('DB_USER', 'root'));
