@@ -92,6 +92,7 @@ function db(): PDO
         PDO::ATTR_EMULATE_PREPARES => false,
     ]);
     ensureAppTables($pdo);
+    ensureSchemaCompatibility($pdo);
     ensureDefaultSeedData($pdo);
     return $pdo;
 }
@@ -219,6 +220,22 @@ function ensureAppTables(PDO $pdo): void
 
     foreach ($statements as $sql) {
         $pdo->exec($sql);
+    }
+}
+
+function ensureSchemaCompatibility(PDO $pdo): void
+{
+    // Keep old backups compatible with current code without dropping user data.
+    $migrations = [
+        'ALTER TABLE allocations ADD COLUMN IF NOT EXISTS related_transfer_id INT NULL',
+    ];
+
+    foreach ($migrations as $sql) {
+        try {
+            $pdo->exec($sql);
+        } catch (Throwable $e) {
+            error_log('Schema compatibility migration failed: ' . $e->getMessage());
+        }
     }
 }
 
