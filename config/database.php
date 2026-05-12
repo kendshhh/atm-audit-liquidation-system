@@ -129,13 +129,17 @@ class DbSessionHandler implements SessionHandlerInterface
     {
         try {
             $lifetime = max(1, (int) ini_get('session.gc_maxlifetime'));
+            $expiresAt = (new DateTimeImmutable())
+                ->modify('+' . $lifetime . ' seconds')
+                ->format('Y-m-d H:i:s');
+
             db()->prepare(
                 'INSERT INTO php_sessions (id, session_data, expires_at)
-                 VALUES (:id, :data, DATE_ADD(NOW(), INTERVAL :lt SECOND))
+                 VALUES (:id, :data, :expires_at)
                  ON DUPLICATE KEY UPDATE
                      session_data = VALUES(session_data),
                      expires_at   = VALUES(expires_at)'
-            )->execute(['id' => $id, 'data' => $data, 'lt' => $lifetime]);
+            )->execute(['id' => $id, 'data' => $data, 'expires_at' => $expiresAt]);
             return true;
         } catch (Throwable) {
             return false;
