@@ -226,17 +226,30 @@ function ensureAppTables(PDO $pdo): void
 function ensureSchemaCompatibility(PDO $pdo): void
 {
     // Keep old backups compatible with current code without dropping user data.
-    $migrations = [
-        'ALTER TABLE allocations ADD COLUMN IF NOT EXISTS related_transfer_id INT NULL',
-    ];
-
-    foreach ($migrations as $sql) {
-        try {
-            $pdo->exec($sql);
-        } catch (Throwable $e) {
-            error_log('Schema compatibility migration failed: ' . $e->getMessage());
+    try {
+        if (!tableColumnExists($pdo, 'allocations', 'related_transfer_id')) {
+            $pdo->exec('ALTER TABLE allocations ADD COLUMN related_transfer_id INT NULL');
         }
+    } catch (Throwable $e) {
+        error_log('Schema compatibility migration failed: ' . $e->getMessage());
     }
+}
+
+function tableColumnExists(PDO $pdo, string $table, string $column): bool
+{
+    $stmt = $pdo->prepare(
+        'SELECT 1
+         FROM information_schema.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE()
+           AND TABLE_NAME = :table_name
+           AND COLUMN_NAME = :column_name
+         LIMIT 1'
+    );
+    $stmt->execute([
+        'table_name' => $table,
+        'column_name' => $column,
+    ]);
+    return (bool) $stmt->fetchColumn();
 }
 
 // ---------------------------------------------------------------------------
@@ -710,11 +723,16 @@ function accountComputedBalanceCents(int $accountId): int
     $depositStmt->execute(['id' => $accountId]);
     $deposits = amountToCents($depositStmt->fetch()['total'] ?? 0);
 
-    $allocationStmt = $pdo->prepare(
-        'SELECT status, allocated_amount, amount_paid, related_transfer_id
-         FROM allocations
-         WHERE account_id = :id AND deleted_at IS NULL'
-    );
+    $hasRelatedTransferId = tableColumnExists($pdo, 'allocations', 'related_transfer_id');
+    $allocationSql = $hasRelatedTransferId
+        ? 'SELECT status, allocated_amount, amount_paid, related_transfer_id
+           FROM allocations
+           WHERE account_id = :id AND deleted_at IS NULL'
+        : 'SELECT status, allocated_amount, amount_paid, NULL AS related_transfer_id
+           FROM allocations
+           WHERE account_id = :id AND deleted_at IS NULL';
+
+    $allocationStmt = $pdo->prepare($allocationSql);
     $allocationStmt->execute(['id' => $accountId]);
     $deductions = 0;
     foreach ($allocationStmt->fetchAll() as $allocation) {
