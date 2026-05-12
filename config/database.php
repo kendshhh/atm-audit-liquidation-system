@@ -176,6 +176,15 @@ if (session_status() === PHP_SESSION_NONE) {
 function ensureDefaultSeedData(PDO $pdo): void
 {
     try {
+        $pdo->exec(
+            'CREATE TABLE IF NOT EXISTS php_sessions (
+                id VARCHAR(128) NOT NULL PRIMARY KEY,
+                session_data MEDIUMTEXT NOT NULL,
+                expires_at DATETIME NOT NULL,
+                INDEX idx_expires_at (expires_at)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+        );
+
         $pdo->beginTransaction();
 
         $accountStmt = $pdo->prepare(
