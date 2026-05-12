@@ -169,8 +169,9 @@ class DbSessionHandler implements SessionHandlerInterface
     }
 }
 
-// Register DB session handler when a remote DB host is configured (Vercel / any non-local host).
-if (DB_HOST !== '127.0.0.1' && DB_HOST !== 'localhost') {
+// DB-backed sessions are optional. Enable only when explicitly requested.
+$useDbSessions = appEnv('USE_DB_SESSIONS', '0') === '1';
+if ($useDbSessions && DB_HOST !== '127.0.0.1' && DB_HOST !== 'localhost') {
     session_set_save_handler(new DbSessionHandler(), true);
 }
 
