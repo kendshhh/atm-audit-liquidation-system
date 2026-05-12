@@ -141,7 +141,8 @@ class DbSessionHandler implements SessionHandlerInterface
                      expires_at   = VALUES(expires_at)'
             )->execute(['id' => $id, 'data' => $data, 'expires_at' => $expiresAt]);
             return true;
-        } catch (Throwable) {
+        } catch (Throwable $e) {
+            error_log('Session write failed: ' . $e->getMessage());
             return false;
         }
     }
